@@ -143,6 +143,47 @@
                 <SCOPE ref="SCOPE-AUTH" />
             </LINKS>
         </USE_CASE>
+        <USE_CASE id="UC-FILE-TREE-CREATE-FOLDER">
+            <ACTOR ref="ACTOR-USER" />
+            <ACTION>Создаёт папку внутри папки, в которой ему разрешено создание вложенных элементов.</ACTION>
+            <GOAL>Организовать доступные ему файлы и папки в иерархическую структуру.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-FILE-TREE" />
+            </LINKS>
+        </USE_CASE>
+        <USE_CASE id="UC-FILE-TREE-LIST-FOLDER">
+            <ACTOR ref="ACTOR-USER" />
+            <ACTION>Получает содержимое доступной ему папки.</ACTION>
+            <GOAL>Увидеть непосредственно находящиеся в ней доступные файлы и папки.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-FILE-TREE" />
+            </LINKS>
+        </USE_CASE>
+        <USE_CASE id="UC-FILE-TREE-RENAME">
+            <ACTOR ref="ACTOR-USER" />
+            <ACTION>Переименовывает доступный ему файл или папку, если ему разрешено изменение этого объекта.</ACTION>
+            <GOAL>Изменить имя объекта без изменения его положения в файловой структуре.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-FILE-TREE" />
+            </LINKS>
+        </USE_CASE>
+        <USE_CASE id="UC-FILE-TREE-MOVE">
+            <ACTOR ref="ACTOR-USER" />
+            <ACTION>Перемещает доступный ему файл или папку в другую папку, если ему разрешено перемещение объекта и размещение его в целевой папке.</ACTION>
+            <GOAL>Изменить положение объекта в иерархической файловой структуре.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-FILE-TREE" />
+            </LINKS>
+        </USE_CASE>
+        <USE_CASE id="UC-FILE-TREE-DELETE">
+            <ACTOR ref="ACTOR-USER" />
+            <ACTION>Удаляет доступный ему файл или папку, если ему разрешено удаление этого объекта.</ACTION>
+            <GOAL>Убрать ненужный объект из доступной ему файловой структуры.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-FILE-TREE" />
+                <SCOPE ref="SCOPE-DELETION-TRACKING" />
+            </LINKS>
+        </USE_CASE>
     </AAG_SCENARIOS>
 </REQUIREMENTS_ANALYSIS>
 
