@@ -118,6 +118,32 @@
             Будущий клиент облачного хранилища, действующий от имени аутентифицированного пользователя и зарегистрированного устройства и использующий серверный протокол изменений для синхронизации локального состояния.
         </ACTOR>
     </ACTORS>
+    <AAG_SCENARIOS>
+        <USE_CASE id="UC-AUTH-REGISTER">
+            <ACTOR ref="ACTOR-ANONYMOUS-USER" />
+            <ACTION>Регистрируется в системе.</ACTION>
+            <GOAL>Получить собственную учётную запись для использования облачного хранилища.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-AUTH" />
+            </LINKS>
+        </USE_CASE>
+        <USE_CASE id="UC-AUTH-AUTHENTICATE">
+            <ACTOR ref="ACTOR-ANONYMOUS-USER" />
+            <ACTION>Аутентифицируется в системе.</ACTION>
+            <GOAL>Начать пользовательскую сессию и получить возможность выполнять доступные ему операции облачного хранилища.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-AUTH" />
+            </LINKS>
+        </USE_CASE>
+        <USE_CASE id="UC-AUTH-GET-CURRENT-USER">
+            <ACTOR ref="ACTOR-USER" />
+            <ACTION>Получает данные своей текущей учётной записи.</ACTION>
+            <GOAL>Определить пользователя, от имени которого выполняется текущая сессия.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-AUTH" />
+            </LINKS>
+        </USE_CASE>
+    </AAG_SCENARIOS>
 </REQUIREMENTS_ANALYSIS>
 
 
