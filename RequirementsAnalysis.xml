@@ -192,6 +192,16 @@
                 <SCOPE ref="SCOPE-FILE-TREE" />
             </LINKS>
         </USE_CASE>
+        <USE_CASE id="UC-FILE-CONTENT-UPDATE">
+            <ACTOR ref="ACTOR-USER" />
+            <ACTION>Изменяет содержимое существующего файла, если ему разрешена такая операция.</ACTION>
+            <GOAL>Сохранить изменённое содержимое файла как его текущее содержимое.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-FILE-CONTENT" />
+                <SCOPE ref="SCOPE-VERSIONING" />
+                <SCOPE ref="SCOPE-CONFLICT" />
+            </LINKS>
+        </USE_CASE>
     </AAG_SCENARIOS>
 </REQUIREMENTS_ANALYSIS>
 
