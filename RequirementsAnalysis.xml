@@ -137,6 +137,7 @@
             <ACTOR ref="ACTOR-ANONYMOUS-USER" />
             <ACTION>Аутентифицируется в системе.</ACTION>
             <GOAL>Начать пользовательскую сессию и получить возможность выполнять доступные ему операции облачного хранилища.</GOAL>
+            <STARTS_PROCESS ref="BP-AUTH-AUTHENTICATE" />
             <LINKS>
                 <SCOPE ref="SCOPE-AUTH" />
             </LINKS>
@@ -310,6 +311,18 @@
                 <USE_CASE ref="UC-ADMIN-CREATE-USER" />
                 <SCOPE ref="SCOPE-AUTH" />
                 <SCOPE ref="SCOPE-ADMINISTRATION" />
+            </LINKS>
+        </BUSINESS_PROCESS>
+        <BUSINESS_PROCESS id="BP-AUTH-AUTHENTICATE">
+            <DESCRIPTION>Неаутентифицированный пользователь подтверждает свою принадлежность существующей учётной записи с помощью переданных аутентификационных данных, после чего при успешной проверке система начинает пользовательскую сессию.</DESCRIPTION>
+            <STEP id="STEP-AUTH-AUTHENTICATE-SUBMIT-DATA" order="1">Пользователь передаёт аутентификационные данные.</STEP>
+            <STEP id="STEP-AUTH-AUTHENTICATE-VALIDATE-DATA" order="2">Система проверяет, что переданные аутентификационные данные достаточны и допустимы для попытки аутентификации. Если проверка не пройдена, процесс завершается без создания пользовательской сессии.</STEP>
+            <STEP id="STEP-AUTH-AUTHENTICATE-VERIFY-ACCOUNT" order="3">Система проверяет, что переданные данные позволяют подтвердить принадлежность пользователя существующей учётной записи. Если подтвердить аутентификацию не удалось, процесс завершается без создания пользовательской сессии.</STEP>
+            <STEP id="STEP-AUTH-AUTHENTICATE-START-SESSION" order="4">Если аутентификация подтверждена, система начинает пользовательскую сессию для соответствующей учётной записи.</STEP>
+            <RESULT>При успешном завершении пользователь аутентифицирован и существует пользовательская сессия, от имени которой он может выполнять доступные ему операции системы.</RESULT>
+            <LINKS>
+                <USE_CASE ref="UC-AUTH-AUTHENTICATE" />
+                <SCOPE ref="SCOPE-AUTH" />
             </LINKS>
         </BUSINESS_PROCESS>
     </BUSINESS_PROCESSES>
