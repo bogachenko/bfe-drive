@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<REQUIREMENTS_ANALYSIS id="RA-PRODUCT-BFE-DRIVE" status="">
+    <SYSTEM_VISION id="VISION-BFE-DRIVE">
+        Создать собственное облачное файловое хранилище по принципу OneDrive, в котором пользователи могут хранить файлы и папки, управлять файловой структурой, предоставлять другим пользователям доступ к отдельным папкам и в дальнейшем работать с хранилищем через Web, Desktop и Android-клиенты.
+    </SYSTEM_VISION>
+    <PROJECT_GOAL id="GOAL-BACKEND-V1">
+        Создать законченное серверное ядро облачного файлового хранилища и стабильный API-контракт, достаточный для последующего независимого подключения Web, Desktop и Android-клиентов.  Сервер должен обеспечивать аутентификацию пользователей, файловое дерево, хранение содержимого файлов в Yandex Object Storage, управление доступом к папкам, журнал изменений, синхронизационные курсоры устройств и обнаружение конфликтующих изменений по версии файла. Клиентские приложения в данный проект не входят. 
+    </PROJECT_GOAL>
+    <SYSTEM_SCOPE id="SCOPE-BACKEND-V1">
+        <IN_SCOPE>
+
+            <CAPABILITY id="SCOPE-AUTH">
+                Регистрация и аутентификация пользователей, управление пользовательской сессией и получение данных текущего пользователя.
+            </CAPABILITY>
+
+            <CAPABILITY id="SCOPE-FILE-TREE">
+                Управление иерархическим файловым деревом: создание папок, просмотр содержимого доступной папки, переименование, перемещение и удаление файлов и папок, а также получение метаданных файлов.
+            </CAPABILITY>
+
+            <CAPABILITY id="SCOPE-FILE-CONTENT">
+                Загрузка и скачивание содержимого файлов, включая протокол загрузки больших файлов, допускающий продолжение незавершённой загрузки.
+            </CAPABILITY>
+
+            <CAPABILITY id="SCOPE-ACL">
+                Предоставление отдельным пользователям доступа к выбранным папкам с назначением заданной роли или уровня доступа, наследование этого доступа на вложенные элементы и проверка разрешённости каждой операции над доступными объектами.
+            </CAPABILITY>
+
+            <CAPABILITY id="SCOPE-HIDDEN-ANCESTORS">
+                Пользователь, которому предоставлен доступ к вложенной папке, видит эту папку и доступное содержимое внутри неё, но не получает доступ и не видит родительскую структуру, если отдельного права на неё у него нет.
+            </CAPABILITY>
+
+            <CAPABILITY id="SCOPE-CHANGE-LOG">
+                Формирование упорядоченного журнала изменений файлового дерева и прав доступа, пригодного для последующей синхронизации клиентов.
+            </CAPABILITY>
+
+            <CAPABILITY id="SCOPE-DELETION-TRACKING">
+                Удаление файла или папки должно фиксироваться как изменение, доступное через протокол синхронизации, чтобы клиент мог корректно отразить удаление в своём локальном состоянии.
+            </CAPABILITY>
+
+            <CAPABILITY id="SCOPE-DEVICES">
+                Регистрация устройств пользователя и хранение позиции, до которой конкретное устройство обработало журнал изменений.
+            </CAPABILITY>
+
+            <CAPABILITY id="SCOPE-SYNC-PROTOCOL">
+                Предоставление через API изменений после указанной позиции журнала так, чтобы будущий клиент мог реализовать инкрементальную синхронизацию.
+            </CAPABILITY>
+
+            <CAPABILITY id="SCOPE-VERSIONING">
+                Хранение текущей версии изменяемого файла или узла и обнаружение попытки изменить устаревшую версию.
+            </CAPABILITY>
+
+            <CAPABILITY id="SCOPE-CONFLICT">
+                Отклонение конфликтующего изменения,  основанного на устаревшей версии объекта, без автоматического разрешения конфликта сервером.
+            </CAPABILITY>
+        </IN_SCOPE>
+        <OUT_OF_SCOPE>
+            <CAPABILITY id="OUT-WEB-CLIENT">
+                Web-клиент.
+            </CAPABILITY>
+            <CAPABILITY id="OUT-DESKTOP-CLIENT">
+                Desktop-клиент и локальный sync engine.
+            </CAPABILITY>
+            <CAPABILITY id="OUT-ANDROID-CLIENT">
+                Android-клиент и локальный sync engine.
+            </CAPABILITY>
+            <CAPABILITY id="OUT-PREVIEWS">
+                Превью и thumbnails файлов.
+            </CAPABILITY>
+            <CAPABILITY id="OUT-PHOTO-GALLERY">
+                Специализированная фотогалерея.
+            </CAPABILITY>
+            <CAPABILITY id="OUT-CAMERA-UPLOAD">
+                Автоматическая загрузка фотографий с камеры.
+            </CAPABILITY>
+            <CAPABILITY id="OUT-NOTIFICATIONS">
+                Пользовательские уведомления и push-уведомления.
+            </CAPABILITY>
+            <CAPABILITY id="OUT-REALTIME">
+                WebSocket и доставка изменений клиентам в реальном времени.
+            </CAPABILITY>
+            <CAPABILITY id="OUT-PUBLIC-LINKS">
+                Публичные ссылки на файлы и папки.
+            </CAPABILITY>
+            <CAPABILITY id="OUT-PERSONAL-VAULT">
+                Personal Vault и аналогичные защищённые области.
+            </CAPABILITY>
+            <CAPABILITY id="OUT-CONTENT-SEARCH">
+                Поиск по содержимому файлов.
+            </CAPABILITY>
+            <CAPABILITY id="OUT-VERSION-HISTORY">
+                Хранение и восстановление предыдущих версий содержимого файла.
+            </CAPABILITY>
+            <CAPABILITY id="OUT-FILES-ON-DEMAND">
+                Files On-Demand и виртуализация локального файлового дерева.
+            </CAPABILITY>
+            <CAPABILITY id="OUT-TRASH">
+                Пользовательская корзина, восстановление удалённых элементов и управление ею.
+            </CAPABILITY>
+            <CAPABILITY id="OUT-AUTO-CONFLICT-RESOLUTION">
+                Автоматическое слияние или иное разрешение конфликтующих изменений.
+            </CAPABILITY>
+        </OUT_OF_SCOPE>
+    </SYSTEM_SCOPE>
+</REQUIREMENTS_ANALYSIS>
+
+
+
