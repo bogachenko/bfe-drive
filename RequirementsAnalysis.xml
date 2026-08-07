@@ -224,5 +224,14 @@
                 <SCOPE ref="SCOPE-CONFLICT" />
             </LINKS>
         </USE_CASE>
+        <USE_CASE id="UC-FILE-CONTENT-VIEW">
+            <ACTOR ref="ACTOR-USER" />
+            <ACTION>Просматривает содержимое файла, если ему разрешён просмотр этого файла.</ACTION>
+            <GOAL>Ознакомиться с содержимым файла без необходимости получать его исходное содержимое.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-CONTROLLED-VIEW" />
+                <SCOPE ref="SCOPE-INDEPENDENT-PERMISSIONS" />
+            </LINKS>
+        </USE_CASE>
     </AAG_SCENARIOS>
 </REQUIREMENTS_ANALYSIS>
