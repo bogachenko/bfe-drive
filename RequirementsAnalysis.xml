@@ -149,7 +149,7 @@
         </USE_CASE>
         <USE_CASE id="UC-FILE-TREE-CREATE-FOLDER">
             <ACTOR ref="ACTOR-USER" />
-            <ACTION>Создаёт папку внутри папки, в которой ему разрешено создание вложенных элементов.</ACTION>
+            <ACTION>Создаёт папку внутри папки, в которой ему разрешено создание папок.</ACTION>
             <GOAL>Организовать доступные ему файлы и папки в иерархическую структуру.</GOAL>
             <LINKS>
                 <SCOPE ref="SCOPE-FILE-TREE" />
