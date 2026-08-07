@@ -257,5 +257,32 @@
                 <SCOPE ref="SCOPE-ACL" />
             </LINKS>
         </USE_CASE>
+        <USE_CASE id="UC-ADMIN-GRANT-ACCESS">
+            <ACTOR ref="ACTOR-ADMIN" />
+            <ACTION>Предоставляет пользователю доступ к любой папке системы с назначением уровня доступа независимо от её владельца.</ACTION>
+            <GOAL>Административно установить доступ пользователя к выбранной папке и доступным через неё вложенным объектам.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-ACL" />
+                <SCOPE ref="SCOPE-ADMINISTRATION" />
+            </LINKS>
+        </USE_CASE>
+        <USE_CASE id="UC-ADMIN-CHANGE-ACCESS">
+            <ACTOR ref="ACTOR-ADMIN" />
+            <ACTION>Изменяет назначенный пользователю уровень доступа к любой папке системы независимо от её владельца.</ACTION>
+            <GOAL>Административно изменить набор операций, разрешённых пользователю в отношении выбранной папки и доступных через неё вложенных объектов.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-ACL" />
+                <SCOPE ref="SCOPE-ADMINISTRATION" />
+            </LINKS>
+        </USE_CASE>
+        <USE_CASE id="UC-ADMIN-REVOKE-ACCESS">
+            <ACTOR ref="ACTOR-ADMIN" />
+            <ACTION>Отзывает предоставленный пользователю доступ к любой папке системы независимо от её владельца.</ACTION>
+            <GOAL>Административно прекратить доступ пользователя к выбранной папке и доступ, полученный через неё к вложенным объектам.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-ACL" />
+                <SCOPE ref="SCOPE-ADMINISTRATION" />
+            </LINKS>
+        </USE_CASE>
     </AAG_SCENARIOS>
 </REQUIREMENTS_ANALYSIS>
