@@ -192,6 +192,22 @@
                 <SCOPE ref="SCOPE-FILE-TREE" />
             </LINKS>
         </USE_CASE>
+        <USE_CASE id="UC-FILE-CONTENT-UPLOAD">
+            <ACTOR ref="ACTOR-USER" />
+            <ACTION>Загружает новый файл в папку, в которой ему разрешено создание вложенных элементов.</ACTION>
+            <GOAL>Сохранить файл в облачном хранилище и сделать его доступным для дальнейшей работы.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-FILE-CONTENT" />
+            </LINKS>
+        </USE_CASE>
+        <USE_CASE id="UC-FILE-CONTENT-DOWNLOAD">
+            <ACTOR ref="ACTOR-USER" />
+            <ACTION>Скачивает содержимое файла, если ему разрешено чтение его содержимого.</ACTION>
+            <GOAL>Получить содержимое хранящегося в облаке файла.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-FILE-CONTENT" />
+            </LINKS>
+        </USE_CASE>
         <USE_CASE id="UC-FILE-CONTENT-UPDATE">
             <ACTOR ref="ACTOR-USER" />
             <ACTION>Изменяет содержимое существующего файла, если ему разрешена такая операция.</ACTION>
