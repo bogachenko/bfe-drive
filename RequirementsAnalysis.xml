@@ -184,6 +184,14 @@
                 <SCOPE ref="SCOPE-DELETION-TRACKING" />
             </LINKS>
         </USE_CASE>
+        <USE_CASE id="UC-FILE-TREE-GET-FILE-METADATA">
+            <ACTOR ref="ACTOR-USER" />
+            <ACTION>Получает метаданные доступного ему файла.</ACTION>
+            <GOAL>Получить сведения о файле для его отображения и выполнения разрешённых операций с ним.</GOAL>
+            <LINKS>
+                <SCOPE ref="SCOPE-FILE-TREE" />
+            </LINKS>
+        </USE_CASE>
     </AAG_SCENARIOS>
 </REQUIREMENTS_ANALYSIS>
 
