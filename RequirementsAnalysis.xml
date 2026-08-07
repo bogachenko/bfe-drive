@@ -146,6 +146,7 @@
             <ACTOR ref="ACTOR-USER" />
             <ACTION>Получает данные своей текущей учётной записи.</ACTION>
             <GOAL>Определить пользователя, от имени которого выполняется текущая сессия.</GOAL>
+            <STARTS_PROCESS ref="BP-AUTH-GET-CURRENT-USER" />
             <LINKS>
                 <SCOPE ref="SCOPE-AUTH" />
             </LINKS>
@@ -322,6 +323,18 @@
             <RESULT>При успешном завершении пользователь аутентифицирован и существует пользовательская сессия, от имени которой он может выполнять доступные ему операции системы.</RESULT>
             <LINKS>
                 <USE_CASE ref="UC-AUTH-AUTHENTICATE" />
+                <SCOPE ref="SCOPE-AUTH" />
+            </LINKS>
+        </BUSINESS_PROCESS>
+        <BUSINESS_PROCESS id="BP-AUTH-GET-CURRENT-USER">
+            <DESCRIPTION>Аутентифицированный пользователь получает данные учётной записи, которой соответствует его текущая пользовательская сессия.</DESCRIPTION>
+            <STEP id="STEP-AUTH-GET-CURRENT-USER-REQUEST" order="1">Пользователь запрашивает данные текущей учётной записи в рамках своей пользовательской сессии.</STEP>
+            <STEP id="STEP-AUTH-GET-CURRENT-USER-VALIDATE-SESSION" order="2">Система проверяет, что пользовательская сессия существует и действительна. Если действительной сессии нет, процесс завершается без выдачи данных учётной записи.</STEP>
+            <STEP id="STEP-AUTH-GET-CURRENT-USER-RESOLVE-ACCOUNT" order="3">Система определяет учётную запись пользователя, которой соответствует действующая сессия.</STEP>
+            <STEP id="STEP-AUTH-GET-CURRENT-USER-RETURN-DATA" order="4">Система возвращает данные определённой текущей учётной записи.</STEP>
+            <RESULT>При успешном завершении пользователь получает данные своей текущей учётной записи, соответствующей действующей пользовательской сессии.</RESULT>
+            <LINKS>
+                <USE_CASE ref="UC-AUTH-GET-CURRENT-USER" />
                 <SCOPE ref="SCOPE-AUTH" />
             </LINKS>
         </BUSINESS_PROCESS>
