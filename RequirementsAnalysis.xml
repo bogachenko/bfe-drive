@@ -169,6 +169,8 @@
             <GOAL>Изменить имя объекта без изменения его положения в файловой структуре.</GOAL>
             <LINKS>
                 <SCOPE ref="SCOPE-FILE-TREE" />
+                <SCOPE ref="SCOPE-VERSIONING" />
+                <SCOPE ref="SCOPE-CONFLICT" />
             </LINKS>
         </USE_CASE>
         <USE_CASE id="UC-FILE-TREE-MOVE">
@@ -177,6 +179,8 @@
             <GOAL>Изменить положение объекта в иерархической файловой структуре.</GOAL>
             <LINKS>
                 <SCOPE ref="SCOPE-FILE-TREE" />
+                <SCOPE ref="SCOPE-VERSIONING" />
+                <SCOPE ref="SCOPE-CONFLICT" />
             </LINKS>
         </USE_CASE>
         <USE_CASE id="UC-FILE-TREE-DELETE">
@@ -186,6 +190,8 @@
             <LINKS>
                 <SCOPE ref="SCOPE-FILE-TREE" />
                 <SCOPE ref="SCOPE-DELETION-TRACKING" />
+                <SCOPE ref="SCOPE-VERSIONING" />
+                <SCOPE ref="SCOPE-CONFLICT" />
             </LINKS>
         </USE_CASE>
         <USE_CASE id="UC-FILE-TREE-GET-FILE-METADATA">
