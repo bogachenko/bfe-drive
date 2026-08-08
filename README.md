@@ -26,11 +26,23 @@
 ```text
 ADMIN
 → создаёт обычную non-admin учётную запись
-→ отдельной операцией предоставляет ей global administrative powers
+→ задаёт initial login + password
+→ отдельной операцией предоставляет global administrative powers
 → учётная запись становится ADMIN
 ```
 
 `BP-ADMIN-CREATE-USER` всегда создаёт только **non-admin** учётную запись. Он никогда не создаёт ADMIN неявно.
+
+При создании учётной записи ADMIN задаёт первоначальные credentials:
+
+```text
+initial login
++
+initial password
+→ достаточны для последующей authentication
+```
+
+Login должен быть допустим и не конфликтовать с существующей учётной записью, password должен быть допустим. Конкретные правила допустимости и техническая проверка credentials на уровне `RequirementsAnalysis` не определяются.
 
 После появления первоначального администратора предоставить глобальные административные полномочия существующей non-admin учётной записи может только уже существующий аутентифицированный ADMIN.
 
@@ -65,17 +77,120 @@ A снимает admin powers с B
 
 Если администраторов несколько, ADMIN также может снять полномочия с самого себя; после этого его последующие операции выполняются уже как non-admin.
 
+Только ADMIN может административно управлять login и password других существующих учётных записей:
+
+```text
+ADMIN
+→ CHANGE USER LOGIN
+→ RESET USER PASSWORD
+```
+
+Административный `RESET PASSWORD` не требует знания текущего password и не предоставляет возможность его прочитать. Успешный reset прекращает действие всех ранее выданных сессий и всех существовавших renewal-basis целевой учётной записи.
+
+Обычный пользователь:
+
+```text
+→ не может изменить свой login
+→ не может изменить login другого пользователя
+→ не может выполнить administrative password reset
+```
+
+При этом каждый аутентифицированный пользователь, включая ADMIN в отношении собственной учётной записи, может самостоятельно изменить **собственный** password через отдельный self-service процесс с подтверждением текущего password.
+
 ### SCOPE-AUTH
 
-Администратор создаёт обычные учётные записи пользователей **без глобальных административных полномочий**. Предоставление и снятие global administrative powers являются отдельными административными операциями над существующими учётными записями.
+Backend V1 использует для обычной password-authentication действующие `login` и `password` существующей учётной записи.
 
-Также scope включает аутентификацию пользователей, поддержание пользовательской сессии, получение новой пользовательской сессии без повторного ввода аутентификационных данных при наличии действительного основания для возобновления работы и получение данных текущего пользователя. Самостоятельная регистрация пользователей в Backend V1 не поддерживается.
+Scope включает:
+
+- создание ADMIN обычных учётных записей с первоначальными login/password;
+- authentication пользователя по действующим login/password;
+- пользовательские sessions;
+- session renewal;
+- получение данных текущего пользователя;
+- самостоятельную смену password собственной учётной записи;
+- административный reset password существующей учётной записи;
+- административное изменение login существующей учётной записи;
+- отдельное административное предоставление и снятие global administrative powers.
+
+Самостоятельная регистрация пользователей в Backend V1 не поддерживается.
+
+Пользователь самостоятельно login не изменяет. Самостоятельная смена password допускается только для собственной учётной записи:
+
+```text
+USER
++ valid session
++ correct current password
++ valid new password
+→ password changed
+```
+
+При успешной самостоятельной смене password:
+
+```text
+new password
+→ становится действующим
+
+old password
+→ перестаёт действовать
+
+session, где выполнена смена
+→ остаётся действительной
+
+другие существующие sessions этой account
+→ становятся недействительными
+
+все renewal basis,
+существовавшие до смены password
+→ становятся недействительными
+```
+
+Если session отсутствует/истекла/недействительна, current password неверен либо новый password недопустим:
+
+```text
+→ password не изменяется
+→ sessions не изменяются
+→ renewal basis не изменяются
+```
+
+Административный reset имеет другую семантику:
+
+```text
+ADMIN
++ valid administrative session
++ existing target account
++ valid new password
+→ new password becomes current
+→ old password stops working
+→ ALL existing target sessions invalidated
+→ ALL existing target renewal basis invalidated
+```
+
+Reset не требует текущего password и применим, в частности, когда пользователь забыл его и поэтому не может выполнить обычный self-service `CHANGE PASSWORD`.
+
+После административного reset пользователь должен снова пройти authentication с новым password. Если ADMIN выполняет reset собственного password через административный процесс, его текущая administrative session также относится к sessions целевой учётной записи и после успешного reset становится недействительной.
+
+Изменение login выполняется только ADMIN:
+
+```text
+ADMIN
++ valid administrative session
++ existing account
++ valid free login
+→ login changed
+```
+
+Login не является идентичностью учётной записи. Изменение login не создаёт нового пользователя и само по себе не прекращает существующие sessions или renewal basis. Старый login перестаёт использоваться для password-authentication этой учётной записи, новый login используется вместо него.
 
 Пользовательская сессия имеет ограниченный срок действия и после его истечения перестаёт быть действительной. Для продолжения работы пользователь должен успешно получить новую действующую сессию на основании ранее установленной сессии либо пройти повторную аутентификацию.
 
-Система должна поддерживать получение новой пользовательской сессии без повторного ввода аутентификационных данных, если у пользователя имеется действительное основание, связанное с ранее установленной пользовательской сессией. Если получение новой сессии на этом основании невозможно, пользователь должен пройти аутентификацию повторно.
+Система поддерживает получение новой пользовательской сессии без повторного ввода login/password, если у пользователя имеется действительное основание, связанное с ранее установленной пользовательской сессией и не аннулированное сменой/reset password.
+
+Если получить новую сессию на этом основании невозможно, пользователь должен пройти authentication повторно с текущими credentials.
 
 Защищённые операции выполняются только в рамках действующей пользовательской сессии.
+
+Технический способ хранения и проверки password, формат стабильной identity учётной записи, а также конкретные правила допустимости login/password на уровне `RequirementsAnalysis` не определяются.
 
 ### SCOPE-INITIAL-ADMIN
 
@@ -437,7 +552,9 @@ Files On-Demand и виртуализация локального файлов�
 
 **Родительский актор:** ACTOR-USER
 
-Пользователь с глобальными административными полномочиями, который может работать со всеми файлами и папками системы, управлять доступом к ним, создавать обычные учётные записи пользователей, предоставлять существующим пользователям global administrative powers, снимать такие полномочия при сохранении хотя бы одного ADMIN и выполнять остальные административные операции независимо от владельца ресурсов и назначенных прав доступа.
+Пользователь с глобальными административными полномочиями, который может работать со всеми файлами и папками системы, управлять доступом к ним, создавать обычные учётные записи пользователей с первоначальными credentials, предоставлять существующим пользователям global administrative powers, снимать такие полномочия при сохранении хотя бы одного ADMIN, изменять login существующих учётных записей, выполнять reset password существующих учётных записей без знания текущего password и выполнять остальные административные операции независимо от владельца ресурсов и назначенных прав доступа.
+
+Как наследник `ACTOR-USER`, ADMIN также может использовать обычный self-service `CHANGE PASSWORD` для собственной учётной записи.
 
 ## ACTOR-ANONYMOUS-USER
 
@@ -445,7 +562,7 @@ Files On-Demand и виртуализация локального файлов�
 
 ## ACTOR-USER
 
-Аутентифицированный пользователь облачного хранилища, который работает с доступными ему файлами и папками.
+Аутентифицированный пользователь облачного хранилища, который работает с доступными ему файлами и папками и может изменить password только собственной учётной записи при подтверждении текущего password. Самостоятельное изменение login пользователю не предоставляется.
 
 ## ACTOR-RESOURCE-OWNER
 
@@ -469,9 +586,9 @@ Files On-Demand и виртуализация локального файлов�
 
 **Актор:** ACTOR-ADMIN
 
-**Действие:** Создаёт обычную учётную запись пользователя без глобальных административных полномочий.
+**Действие:** Создаёт обычную учётную запись пользователя без глобальных административных полномочий и задаёт её первоначальные login и password.
 
-**Цель:** Предоставить пользователю non-admin учётную запись для последующей аутентификации и работы в пределах назначенных разрешений.
+**Цель:** Предоставить пользователю non-admin учётную запись с первоначальными credentials, достаточными для последующей аутентификации и работы в пределах назначенных разрешений.
 
 **Запускает процесс:** BP-ADMIN-CREATE-USER
 
@@ -479,6 +596,8 @@ Files On-Demand и виртуализация локального файлов�
 
 * SCOPE-AUTH
 * SCOPE-ADMINISTRATION
+* BR-AUTH-PASSWORD-NON-DISCLOSURE
+* BR-ACCOUNT-STABLE-IDENTITY
 
 ## UC-ADMIN-GRANT-ADMIN
 
@@ -517,11 +636,47 @@ Files On-Demand и виртуализация локального файлов�
 * SCOPE-INDEPENDENT-PERMISSIONS
 * BR-ADMIN-AT-LEAST-ONE-ADMIN
 
+## UC-ADMIN-RESET-USER-PASSWORD
+
+**Актор:** ACTOR-ADMIN
+
+**Действие:** Устанавливает новый password существующей учётной записи без знания её текущего password.
+
+**Цель:** Восстановить возможность authentication выбранного пользователя с новым password и одновременно прекратить действие прежнего password и ранее выданных пользовательских sessions.
+
+**Запускает процесс:** BP-ADMIN-RESET-USER-PASSWORD
+
+**Связи:**
+
+* SCOPE-ADMINISTRATION
+* SCOPE-AUTH
+* BR-AUTH-PASSWORD-NON-DISCLOSURE
+* BR-ACCOUNT-STABLE-IDENTITY
+* UC-AUTH-AUTHENTICATE
+* UC-AUTH-RENEW-SESSION
+
+## UC-ADMIN-CHANGE-USER-LOGIN
+
+**Актор:** ACTOR-ADMIN
+
+**Действие:** Изменяет login существующей учётной записи на новый допустимый и не конфликтующий с другой учётной записью.
+
+**Цель:** Изменить login, используемый существующим пользователем для последующей authentication, не создавая новую пользовательскую identity.
+
+**Запускает процесс:** BP-ADMIN-CHANGE-USER-LOGIN
+
+**Связи:**
+
+* SCOPE-ADMINISTRATION
+* SCOPE-AUTH
+* BR-ACCOUNT-STABLE-IDENTITY
+* UC-AUTH-AUTHENTICATE
+
 ## UC-AUTH-AUTHENTICATE
 
 **Актор:** ACTOR-ANONYMOUS-USER
 
-**Действие:** Аутентифицируется в системе.
+**Действие:** Аутентифицируется в системе с использованием действующих login и password существующей учётной записи.
 
 **Цель:** Начать пользовательскую сессию и получить возможность выполнять доступные ему операции облачного хранилища.
 
@@ -530,6 +685,8 @@ Files On-Demand и виртуализация локального файлов�
 **Связи:**
 
 * SCOPE-AUTH
+* BR-AUTH-PASSWORD-NON-DISCLOSURE
+* BR-ACCOUNT-STABLE-IDENTITY
 
 ## UC-AUTH-RENEW-SESSION
 
@@ -544,6 +701,8 @@ Files On-Demand и виртуализация локального файлов�
 **Связи:**
 
 * SCOPE-AUTH
+* UC-AUTH-CHANGE-PASSWORD
+* UC-ADMIN-RESET-USER-PASSWORD
 
 ## UC-AUTH-GET-CURRENT-USER
 
@@ -558,6 +717,26 @@ Files On-Demand и виртуализация локального файлов�
 **Связи:**
 
 * SCOPE-AUTH
+* BR-AUTH-PASSWORD-NON-DISCLOSURE
+* BR-ACCOUNT-STABLE-IDENTITY
+
+## UC-AUTH-CHANGE-PASSWORD
+
+**Актор:** ACTOR-USER
+
+**Действие:** Изменяет password собственной учётной записи в действующей пользовательской сессии после подтверждения текущего password.
+
+**Цель:** Заменить действующий password собственной учётной записи новым password без административного вмешательства.
+
+**Запускает процесс:** BP-AUTH-CHANGE-PASSWORD
+
+**Связи:**
+
+* SCOPE-AUTH
+* BR-AUTH-PASSWORD-NON-DISCLOSURE
+* BR-ACCOUNT-STABLE-IDENTITY
+* UC-AUTH-AUTHENTICATE
+* UC-AUTH-RENEW-SESSION
 
 ## UC-FILE-TREE-CREATE-FOLDER
 
@@ -864,6 +1043,83 @@ A performs REVOKE_ADMIN(A)
 
 **Связи:** ACTOR-ADMIN, SCOPE-ADMINISTRATION, SCOPE-AUTH, SCOPE-INITIAL-ADMIN, UC-ADMIN-GRANT-ADMIN, UC-ADMIN-REVOKE-ADMIN, BP-ADMIN-GRANT-ADMIN, BP-ADMIN-REVOKE-ADMIN
 
+## BR-AUTH-PASSWORD-NON-DISCLOSURE — password не является выдаваемыми данными учётной записи
+
+Текущий password учётной записи не должен возвращаться системой:
+
+```text
+current password
+→ не выдаётся владельцу account
+→ не выдаётся ADMIN
+→ не выдаётся другому USER
+```
+
+Пользователь передаёт текущий password как входное подтверждение при `BP-AUTH-CHANGE-PASSWORD`, однако успешная проверка не означает возврат этого password пользователю.
+
+Administrative reset:
+
+```text
+ADMIN
+→ задаёт new password
+→ current password не получает
+→ current password знать не обязан
+```
+
+При `BP-ADMIN-CREATE-USER` ADMIN сам задаёт initial password. Это не создаёт возможности позднее запросить через систему действующий password этой учётной записи.
+
+Технический способ хранения, представления и проверки password на уровне `RequirementsAnalysis` не определяется.
+
+**Связи:** ACTOR-USER, ACTOR-ADMIN, SCOPE-AUTH, SCOPE-ADMINISTRATION, UC-ADMIN-CREATE-USER, UC-AUTH-AUTHENTICATE, UC-AUTH-CHANGE-PASSWORD, UC-ADMIN-RESET-USER-PASSWORD, BP-ADMIN-CREATE-USER, BP-AUTH-CHANGE-PASSWORD, BP-ADMIN-RESET-USER-PASSWORD
+
+## BR-ACCOUNT-STABLE-IDENTITY — login не является identity пользователя
+
+Каждая пользовательская учётная запись имеет стабильную identity, отличную от login.
+
+```text
+user identity ≠ login
+```
+
+Login — изменяемое аутентификационное имя существующей учётной записи.
+
+При административной смене login:
+
+```text
+ADMIN changes login
+→ тот же user identity
+→ тот же ownership
+→ те же ACL assignments
+→ та же audit history
+→ тот же administrative status
+→ тот же password
+→ меняется login для последующей password-authentication
+```
+
+Изменение login не создаёт новую учётную запись.
+
+Существующие sessions и renewal basis связаны со стабильной identity учётной записи, а не с текстом login. Поэтому успешная смена login сама по себе их не прекращает:
+
+```text
+login changed
+→ existing sessions remain
+→ existing valid renewal basis remain
+```
+
+После successful login change:
+
+```text
+old login
+→ больше не используется для password-authentication этой account
+
+new login
+→ используется вместо него
+```
+
+Изменение или reset password также не меняют стабильную identity учётной записи.
+
+Конкретный технический формат stable identity (`UUID`, integer и т. п.) на уровне `RequirementsAnalysis` не определяется.
+
+**Связи:** ACTOR-USER, ACTOR-ADMIN, SCOPE-AUTH, SCOPE-ADMINISTRATION, UC-ADMIN-CREATE-USER, UC-AUTH-AUTHENTICATE, UC-AUTH-GET-CURRENT-USER, UC-AUTH-CHANGE-PASSWORD, UC-ADMIN-RESET-USER-PASSWORD, UC-ADMIN-CHANGE-USER-LOGIN, BP-ADMIN-CREATE-USER, BP-AUTH-CHANGE-PASSWORD, BP-ADMIN-RESET-USER-PASSWORD, BP-ADMIN-CHANGE-USER-LOGIN
+
 ## BR-FILE-TREE-UNIQUE-CHILD-NAME — уникальность имени непосредственного дочернего элемента
 
 В одной родительской папке не допускается существование двух **разных** непосредственных дочерних элементов с одинаковым именем независимо от типа объекта.
@@ -1074,28 +1330,35 @@ effective permissions на B и descendants = {VIEW}
 
 ## BP-ADMIN-CREATE-USER — создание обычной учётной записи администратором
 
-Аутентифицированный ADMIN создаёт новую обычную учётную запись пользователя. Этот процесс **никогда не создаёт ADMIN** и не предоставляет global administrative powers.
+Аутентифицированный ADMIN создаёт новую обычную учётную запись пользователя без global administrative powers и задаёт initial credentials — login и password.
 
 **Последовательность:**
 
-1. **Передача данных.** Администратор передаёт данные новой обычной учётной записи.
-2. **Проверка административной сессии.** Система проверяет действующую пользовательскую сессию и наличие global administrative powers у текущей учётной записи. Без обоих условий учётная запись не создаётся.
-3. **Проверка данных.** Система проверяет, что переданные данные достаточны и допустимы для создания учётной записи. Если проверка не пройдена, процесс завершается без создания учётной записи.
-4. **Проверка существующей учётной записи.** Система проверяет, что данные новой учётной записи не конфликтуют с уже существующей учётной записью. Если конфликт обнаружен, процесс завершается без создания новой учётной записи.
-5. **Создание учётной записи.** Система создаёт новую учётную запись без глобальных административных полномочий.
+1. **Передача данных.** ADMIN передаёт данные новой обычной учётной записи, включая initial login и initial password, достаточные для последующей authentication.
+2. **Проверка административной сессии.** Система проверяет действующую пользовательскую session и наличие global administrative powers у текущей учётной записи. Без обоих условий учётная запись не создаётся.
+3. **Проверка данных.** Система проверяет достаточность и допустимость данных, включая допустимость initial login/password. При ошибке account не создаётся.
+4. **Проверка существующей учётной записи.** Initial login и другие данные, для которых требуется отсутствие конфликта, не должны конфликтовать с существующей account. Если конфликт есть, новая account не создаётся. Конкретные правила нормализации/comparison login на этом уровне не определяются.
+5. **Создание учётной записи.** Система создаёт новую account со стабильной identity, указанным initial login и действующим initial password, без global administrative powers.
 
-**Успешный результат:** существует новая non-admin учётная запись, которую пользователь может использовать для последующей самостоятельной аутентификации.
+**Успешный результат:** существует новая non-admin account со стабильной identity и initial credentials, которыми пользователь может воспользоваться для последующей самостоятельной authentication.
 
 ```text
 BP-ADMIN-CREATE-USER
 → account created
+→ stable identity exists
+→ initial login active
+→ initial password active
 → ADMIN = no
 → user session for new account не создаётся
 ```
 
-Если позднее этому пользователю нужно предоставить административные полномочия, используется отдельный `BP-ADMIN-GRANT-ADMIN`.
+ADMIN задаёт initial password как входные данные создания, но система не предоставляет ему возможности позднее прочитать текущий password account.
 
-**Связи:** ACTOR-ADMIN, UC-ADMIN-CREATE-USER, SCOPE-AUTH, SCOPE-ADMINISTRATION
+Обязательная смена password при первом входе **не вводится**.
+
+Если позднее пользователю нужны административные полномочия, используется отдельный `BP-ADMIN-GRANT-ADMIN`.
+
+**Связи:** ACTOR-ADMIN, UC-ADMIN-CREATE-USER, SCOPE-AUTH, SCOPE-ADMINISTRATION, BR-AUTH-PASSWORD-NON-DISCLOSURE, BR-ACCOUNT-STABLE-IDENTITY
 
 ## BP-ADMIN-GRANT-ADMIN — предоставление глобальных административных полномочий
 
@@ -1160,82 +1423,195 @@ REVOKE_ADMIN(A)
 
 **Связи:** ACTOR-ADMIN, UC-ADMIN-REVOKE-ADMIN, SCOPE-ADMINISTRATION, SCOPE-AUTH, SCOPE-INITIAL-ADMIN, SCOPE-INDEPENDENT-PERMISSIONS, SCOPE-CHANGE-LOG, BR-ADMIN-AT-LEAST-ONE-ADMIN, BR-ACL-EFFECTIVE-PERMISSIONS
 
-## BP-AUTH-AUTHENTICATE — аутентификация пользователя
+## BP-ADMIN-RESET-USER-PASSWORD — административный reset password
 
-Неаутентифицированный пользователь подтверждает свою принадлежность существующей учётной записи с помощью переданных аутентификационных данных. При успешной проверке система начинает пользовательскую сессию.
+Аутентифицированный ADMIN устанавливает новый допустимый password существующей account **без знания текущего password**. Процесс предназначен в том числе для восстановления доступа пользователя, который забыл password и не может выполнить обычный self-service `CHANGE PASSWORD`.
 
 **Последовательность:**
 
-1. **Передача данных.** Пользователь передаёт аутентификационные данные.
-2. **Проверка данных.** Система проверяет, что переданные данные достаточны и допустимы для попытки аутентификации. Если проверка не пройдена, процесс завершается без создания пользовательской сессии.
-3. **Подтверждение учётной записи.** Система проверяет, что переданные данные позволяют подтвердить принадлежность пользователя существующей учётной записи. Если подтвердить аутентификацию не удалось, процесс завершается без создания пользовательской сессии.
-4. **Начало сессии.** Если аутентификация подтверждена, система начинает пользовательскую сессию для соответствующей учётной записи.
+1. **Запрос reset.** ADMIN указывает существующую target account и новый password.
+2. **Проверка административной сессии.** Система проверяет valid non-expired session вызывающего пользователя и его current global administrative powers. Если любое условие не выполняется, target password не меняется.
+3. **Проверка target.** Target account должна существовать. Reset применим к обычной account, ADMIN-account и собственной account выполняющего администратора.
+4. **Проверка нового password.** Новый password должен быть допустим. Current password target-account не требуется и не выдаётся. При недопустимом новом password ни password, ни session-state не изменяются.
+5. **Применение и invalidation.** Если проверки успешны, система как один успешный результат устанавливает new password, прекращает действие old password, всех existing sessions target-account и всех существовавших renewal basis target-account.
 
-**Успешный результат:** пользователь аутентифицирован и существует пользовательская сессия, от имени которой он может выполнять доступные ему операции системы.
+Не допускается:
 
-**Связи:**
+```text
+successful ADMIN RESET PASSWORD
++
+old password still authenticates
+ИЛИ old session still valid
+ИЛИ old renewal basis still valid
+→ недопустимо
+```
 
-* UC-AUTH-AUTHENTICATE
-* SCOPE-AUTH
+Если target account совпадает с account вызывающего ADMIN:
+
+```text
+ADMIN resets own password through admin reset
+→ current administrative session входит в target sessions
+→ после successful reset session становится invalid
+```
+
+**Успешный результат:** new password является действующим password той же account, old password больше не действует, все ранее существовавшие target sessions/renewal-basis недействительны. Для продолжения работы пользователь должен снова пройти `BP-AUTH-AUTHENTICATE` с current login и new password.
+
+Reset не меняет stable identity, login, ownership, ACL assignments, audit history или administrative status target account.
+
+**Связи:** ACTOR-ADMIN, UC-ADMIN-RESET-USER-PASSWORD, UC-AUTH-AUTHENTICATE, UC-AUTH-RENEW-SESSION, SCOPE-AUTH, SCOPE-ADMINISTRATION, BR-AUTH-PASSWORD-NON-DISCLOSURE, BR-ACCOUNT-STABLE-IDENTITY
+
+## BP-ADMIN-CHANGE-USER-LOGIN — административное изменение login
+
+Аутентифицированный ADMIN изменяет login существующей account на новый допустимый login, который не конфликтует с другой существующей account.
+
+**Последовательность:**
+
+1. **Запрос изменения.** ADMIN указывает target account и new login.
+2. **Проверка административной сессии.** Система проверяет valid non-expired session и current global administrative powers вызывающего пользователя. При отрицательном результате login не изменяется.
+3. **Проверка target.** Target account должна существовать. ADMIN может изменить login обычной account, другой ADMIN-account или собственной account.
+4. **Проверка login.** New login должен быть допустим и не конфликтовать с login другой существующей account. Target account исключается из self-conflict. Конкретные normalization/comparison rules на этом уровне не определяются.
+5. **Применение.** Система заменяет login той же account. Old login перестаёт использоваться для subsequent password-authentication, new login используется вместо него.
+
+Если new login недопустим или занят:
+
+```text
+→ login не изменяется
+```
+
+Успешная смена login **не меняет identity**:
+
+```text
+same user identity
+same password
+same ownership
+same ACL assignments
+same audit history
+same administrative status
+same existing sessions
+same valid renewal basis
+```
+
+Обычный USER не может изменить ни свой login, ни чужой.
+
+**Связи:** ACTOR-ADMIN, UC-ADMIN-CHANGE-USER-LOGIN, UC-AUTH-AUTHENTICATE, SCOPE-AUTH, SCOPE-ADMINISTRATION, BR-ACCOUNT-STABLE-IDENTITY
+
+## BP-AUTH-AUTHENTICATE — аутентификация пользователя
+
+Неаутентифицированный пользователь подтверждает принадлежность существующей account с помощью её **действующих login и password**.
+
+**Последовательность:**
+
+1. **Передача данных.** Пользователь передаёт login и password.
+2. **Проверка данных.** Система проверяет, что login/password достаточны и допустимы для попытки authentication. При ошибке session не создаётся.
+3. **Подтверждение account.** Система проверяет, что login/password соответствуют текущим действующим credentials одной existing account. Старый login после successful `CHANGE USER LOGIN` и старый password после successful `CHANGE PASSWORD`/`RESET PASSWORD` действующими credentials больше не являются.
+4. **Начало session.** Если authentication подтверждена, система начинает user session для стабильной identity соответствующей account.
+
+**Успешный результат:** пользователь authenticated по current login/password и получает session, от имени которой выполняет разрешённые операции.
+
+Password проверяется, но не выдаётся как данные account.
+
+**Связи:** UC-AUTH-AUTHENTICATE, UC-AUTH-CHANGE-PASSWORD, UC-ADMIN-RESET-USER-PASSWORD, UC-ADMIN-CHANGE-USER-LOGIN, SCOPE-AUTH, BR-AUTH-PASSWORD-NON-DISCLOSURE, BR-ACCOUNT-STABLE-IDENTITY
 
 ## BP-AUTH-RENEW-SESSION — получение новой сессии для возобновления работы
 
-Неаутентифицированный пользователь получает новую действующую пользовательскую сессию без повторного ввода аутентификационных данных, если существует действительное основание, связанное с ранее установленной пользовательской сессией.
+Неаутентифицированный пользователь получает новую действующую session без повторного ввода login/password, если имеется действительный renewal basis, связанный с ранее установленной session и не аннулированный credential-change.
 
 **Последовательность:**
 
-1. **Передача основания.** Пользователь передаёт системе данные, подтверждающие возможность получить новую пользовательскую сессию на основании ранее установленной сессии.
-2. **Проверка основания.** Система проверяет, что основание для получения новой сессии существует и остаётся действительным.
-3. **Отказ при недействительном основании.** Если основание недействительно, истекло или больше не может быть использовано, новая пользовательская сессия не создаётся и для продолжения работы требуется обычная аутентификация.
-4. **Определение учётной записи.** Если основание действительно, система определяет учётную запись, к которой относится это основание.
-5. **Создание новой сессии.** Система создаёт новую действующую пользовательскую сессию для определённой учётной записи.
+1. **Передача основания.** Пользователь передаёт данные renewal basis.
+2. **Проверка основания.** Система проверяет существование и действительность basis. Basis, существовавший до successful `BP-AUTH-CHANGE-PASSWORD`, либо любой basis target account, существовавший до successful `BP-ADMIN-RESET-USER-PASSWORD`, после такой операции не считается действительным.
+3. **Отказ при invalid basis.** Если basis invalid/expired/revoked due password change/reset либо больше не пригоден по другой причине, new session не создаётся.
+4. **Определение account.** По valid basis система определяет stable identity account. Login change сам по себе связь basis с account не разрывает.
+5. **Создание session.** Система создаёт новую действующую user session для определённой account.
 
-**Успешный результат:** пользователь получает новую действующую пользовательскую сессию без повторного ввода аутентификационных данных и может возобновить работу с системой.
+**Успешный результат:** пользователь получает новую session без повторного ввода login/password.
 
-Если получить новую сессию на этом основании невозможно, пользователь должен пройти обычную аутентификацию.
-
-Поведение защищённой операции после истечения сессии:
+Если valid basis нет, пользователь проходит обычную authentication с current credentials.
 
 ```text
-сессия действует
-→ операция выполняется
-
-срок действия сессии истёк
-→ прежняя сессия недействительна
-→ клиент пытается получить новую сессию на основании ранее установленной
-
-получение новой сессии успешно
-→ создана новая действующая сессия
-→ операция может быть повторена
-
-получение новой сессии неуспешно
-→ требуется обычная аутентификация
+old basis invalidated by password change/reset
+→ cannot renew
 ```
 
-При этом требования не определяют длительность пользовательской сессии, техническое представление основания для получения новой сессии, типы токенов, способ их передачи или сроки их действия.
+```text
+login changed only
+→ otherwise-valid basis remains linked to same account identity
+```
 
-**Связи:**
-
-* UC-AUTH-RENEW-SESSION
-* SCOPE-AUTH
+**Связи:** UC-AUTH-RENEW-SESSION, UC-AUTH-CHANGE-PASSWORD, UC-ADMIN-RESET-USER-PASSWORD, UC-ADMIN-CHANGE-USER-LOGIN, SCOPE-AUTH, BR-ACCOUNT-STABLE-IDENTITY
 
 ## BP-AUTH-GET-CURRENT-USER — получение текущего пользователя
 
-Аутентифицированный пользователь получает данные учётной записи, которой соответствует его текущая пользовательская сессия.
+Аутентифицированный пользователь получает данные stable account identity, которой соответствует current session.
 
 **Последовательность:**
 
-1. **Запрос данных.** Пользователь запрашивает данные текущей учётной записи в рамках своей пользовательской сессии.
-2. **Проверка сессии.** Система проверяет, что пользовательская сессия существует, не истекла и остаётся действительной. Если такой действующей неистёкшей сессии нет, процесс завершается без выдачи данных учётной записи.
-3. **Определение учётной записи.** Система определяет учётную запись пользователя, которой соответствует действующая сессия.
-4. **Выдача данных.** Система возвращает данные определённой текущей учётной записи.
+1. **Запрос данных.** Пользователь запрашивает данные current account.
+2. **Проверка session.** Session должна существовать, не быть expired и оставаться valid.
+3. **Определение account.** Система определяет stable identity account, которой соответствует current session.
+4. **Выдача данных.** Система возвращает данные account, которые могут включать current login и administrative status, но **не включают current password**.
 
-**Успешный результат:** пользователь получает данные своей текущей учётной записи, соответствующей действующей пользовательской сессии.
+**Успешный результат:** пользователь получает данные своей current account без выдачи password.
 
-**Связи:**
+Login change не меняет то, какая stable account соответствует уже существующей session.
 
-* UC-AUTH-GET-CURRENT-USER
-* SCOPE-AUTH
+**Связи:** UC-AUTH-GET-CURRENT-USER, SCOPE-AUTH, BR-AUTH-PASSWORD-NON-DISCLOSURE, BR-ACCOUNT-STABLE-IDENTITY
+
+## BP-AUTH-CHANGE-PASSWORD — самостоятельная смена собственного password
+
+Аутентифицированный USER, включая ADMIN для собственной account, меняет password **только собственной account** в valid session после подтверждения current password.
+
+**Последовательность:**
+
+1. **Запрос смены.** USER передаёт current password своей account и new password.
+2. **Проверка session.** Current session должна существовать, не быть expired и оставаться valid. По session система определяет stable identity собственной account. При invalid session password/session-state не меняются.
+3. **Подтверждение current password.** Переданный current password должен соответствовать current password той же account. Через этот процесс нельзя указать другую account. При неверном current password состояние не меняется.
+4. **Проверка new password.** New password должен быть допустим. При недопустимом password состояние не меняется. Конкретные password-policy rules на этом уровне не определяются.
+5. **Применение и invalidation.** Successful result одновременно:
+   - делает new password действующим;
+   - прекращает действие old password;
+   - сохраняет действительной current session, где выполнена смена;
+   - прекращает все остальные existing sessions account;
+   - прекращает все renewal basis, существовавшие до смены password.
+
+Ошибочные случаи:
+
+```text
+invalid/expired session
+→ password unchanged
+→ sessions unchanged
+→ renewal basis unchanged
+```
+
+```text
+wrong current password
+→ password unchanged
+→ sessions unchanged
+→ renewal basis unchanged
+```
+
+```text
+invalid new password
+→ password unchanged
+→ sessions unchanged
+→ renewal basis unchanged
+```
+
+Успешный случай:
+
+```text
+new password active
+old password invalid
+current session remains valid
+all other old sessions invalid
+all pre-change renewal basis invalid
+```
+
+После завершения сохранившейся current session продолжение без reauthentication возможно только при наличии нового valid renewal basis, появившегося после password change; иначе пользователь проходит normal authentication с new password.
+
+Stable identity, login, ownership, ACL assignments, audit history и administrative status account не изменяются.
+
+**Связи:** ACTOR-USER, ACTOR-ADMIN, UC-AUTH-CHANGE-PASSWORD, UC-AUTH-AUTHENTICATE, UC-AUTH-RENEW-SESSION, SCOPE-AUTH, BR-AUTH-PASSWORD-NON-DISCLOSURE, BR-ACCOUNT-STABLE-IDENTITY
 
 ## BP-FILE-TREE-CREATE-FOLDER — создание папки
 
