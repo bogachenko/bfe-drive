@@ -638,6 +638,49 @@ CREATE_FOLDER / UPLOAD / RENAME / MOVE
 
 **Связи:** SCOPE-FILE-TREE, SCOPE-HIDDEN-ANCESTORS
 
+## BR-VERSIONING-CURRENT-VERSION-AVAILABILITY — доступность current version для разрешённых операций
+
+Для существующего объекта, который вызывающая сторона может использовать в разрешённой ей операции `RENAME`, `MOVE`, `DELETE` или `UPDATE`, система должна предоставлять вызывающей стороне текущую версию объекта, необходимую для caller-known version проверки, даже если у неё отсутствуют `LIST_FOLDER` и `GET_FILE_METADATA`.
+
+`current version` здесь является **операционным состоянием**, необходимым для выполнения разрешённой операции с optimistic conflict check, а не самостоятельным разрешением на чтение metadata или content.
+
+Таким образом, допустима комбинация:
+
+```text
+UPDATE = разрешено
+LIST_FOLDER = запрещено
+GET_FILE_METADATA = запрещено
+VIEW = запрещено
+DOWNLOAD = запрещено
+
+→ current version файла всё равно доступна вызывающей стороне
+  в объёме, необходимом для выполнения UPDATE
+→ дополнительные metadata или content из этого не следуют
+```
+
+То же правило применяется к `RENAME`, `MOVE` и `DELETE`.
+
+Предоставление current version само по себе **не предоставляет**:
+
+- `LIST_FOLDER`;
+- `GET_FILE_METADATA`;
+- `VIEW`;
+- `DOWNLOAD`;
+- другие файловые permissions.
+
+Оно также не должно раскрывать дополнительные метаданные, содержимое или недоступную родительскую структуру объекта.
+
+Требования намеренно не определяют, каким техническим способом current version предоставляется клиенту: как часть результата другой разрешённой операции, через отдельное представление операционного состояния или иным способом. Это определяется ниже уровня `RequirementsAnalysis`.
+
+Правило применяется к:
+
+- `UC-FILE-TREE-RENAME`;
+- `UC-FILE-TREE-MOVE`;
+- `UC-FILE-TREE-DELETE`;
+- `UC-FILE-CONTENT-UPDATE`.
+
+**Связи:** SCOPE-VERSIONING, SCOPE-CONFLICT, SCOPE-INDEPENDENT-PERMISSIONS, SCOPE-HIDDEN-ANCESTORS
+
 # Бизнес-процессы
 
 ## BP-ADMIN-CREATE-USER — создание учётной записи администратором
