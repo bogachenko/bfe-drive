@@ -346,6 +346,19 @@
                 <USE_CASE ref="UC-FILE-TREE-MOVE" />
             </LINKS>
         </BUSINESS_RULE>
+        <BUSINESS_RULE id="BR-VERSIONING-CURRENT-VERSION-AVAILABILITY">
+            <RULE>Для существующего объекта, который вызывающая сторона может использовать в разрешённой ей операции `RENAME`, `MOVE`, `DELETE` или `UPDATE`, система должна предоставлять этой вызывающей стороне текущую версию объекта, необходимую для caller-known version проверки, независимо от наличия разрешений `LIST_FOLDER` и `GET_FILE_METADATA`. Текущая версия является операционным состоянием объекта, необходимым для безопасного выполнения разрешённой операции, а не самостоятельным правом на получение его метаданных или содержимого. Предоставление текущей версии само по себе не предоставляет `LIST_FOLDER`, `GET_FILE_METADATA`, `VIEW`, `DOWNLOAD` или иных файловых разрешений и не должно раскрывать дополнительные метаданные, содержимое или недоступную родительскую структуру объекта. Конкретный технический способ предоставления текущей версии на уровне RequirementsAnalysis не определяется.</RULE>
+            <LINKS>
+                <SCOPE ref="SCOPE-VERSIONING" />
+                <SCOPE ref="SCOPE-CONFLICT" />
+                <SCOPE ref="SCOPE-INDEPENDENT-PERMISSIONS" />
+                <SCOPE ref="SCOPE-HIDDEN-ANCESTORS" />
+                <USE_CASE ref="UC-FILE-TREE-RENAME" />
+                <USE_CASE ref="UC-FILE-TREE-MOVE" />
+                <USE_CASE ref="UC-FILE-TREE-DELETE" />
+                <USE_CASE ref="UC-FILE-CONTENT-UPDATE" />
+            </LINKS>
+        </BUSINESS_RULE>
     </BUSINESS_RULES>
     <BUSINESS_PROCESSES>
         <BUSINESS_PROCESS id="BP-ADMIN-CREATE-USER">
