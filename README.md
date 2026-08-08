@@ -33,6 +33,8 @@ ADMIN
 
 `BP-ADMIN-CREATE-USER` всегда создаёт только **non-admin** учётную запись. Он никогда не создаёт ADMIN неявно.
 
+Создание account не создаёт автоматически folder или файловый ACL assignment; file access может полностью отсутствовать до отдельного административного `GRANT`.
+
 При создании учётной записи ADMIN задаёт первоначальные credentials:
 
 ```text
@@ -97,7 +99,7 @@ ADMIN
 
 При этом каждый аутентифицированный пользователь, включая ADMIN в отношении собственной учётной записи, может самостоятельно изменить **собственный** password через отдельный self-service процесс с подтверждением текущего password.
 
-Глобальные административные полномочия не отменяют структурный инвариант Personal Root. ADMIN может работать с содержимым любой Personal Root и управлять её обычными ACL assignments, но не может через обычные файловые операции переименовать, переместить или удалить сам Personal Root.
+Глобальные административные полномочия позволяют ADMIN работать непосредственно с единственным `System Root` и полным физическим файловым деревом. При этом сам System Root нельзя `RENAME`, `MOVE` или `DELETE`: это структурный инвариант, а не ACL/permission check.
 
 ### SCOPE-AUTH
 
@@ -198,35 +200,23 @@ Login не является идентичностью учётной запис
 
 При первоначальном развёртывании или инициализации системы должна быть создана первоначальная административная учётная запись с первоначальными credentials, включающими login и password, достаточными для последующей authentication, без участия уже существующего администратора и вне обычного процесса создания пользовательских учётных записей.
 
-В рамках той же первоначальной инициализации initial ADMIN получает ровно одну связанную с ним Personal Root и обычный ACL assignment этой же account на Personal Root с полным набором файловых permissions Backend V1:
+В рамках той же первоначальной инициализации системы должен существовать ровно один `System Root` — единая структурная верхушка всего физического file tree.
 
 ```text
-LIST_FOLDER
-GET_FILE_METADATA
-VIEW
-DOWNLOAD
-CREATE_FOLDER
-UPLOAD
-UPDATE
-RENAME
-MOVE
-DELETE
+INITIALIZATION
+→ initial ADMIN account
+→ exactly one System Root
 ```
 
-То есть первоначальное состояние должно быть согласованным:
+System Root появляется вне обычного `CREATE_FOLDER`. Его существование не создаёт ACL assignment ни для initial ADMIN, ни для других accounts и не предоставляет non-admin никаких permissions. Initial ADMIN благодаря global administrative powers может после bootstrap создать первые ordinary folders непосредственно внутри System Root.
 
 ```text
-initial ADMIN account exists
-AND Personal Root exists
-AND account ↔ Personal Root association exists
-AND full initial ACL assignment exists
+initial ADMIN
+→ CREATE_FOLDER(System Root, "Организация")
+→ ordinary folder created
 ```
 
-Наличие global administrative powers не отменяет существование этого ACL assignment. Если позднее с initial ADMIN будут сняты административные полномочия, его файловые возможности как non-admin будут определяться текущим ACL/effective-permission состоянием, в том числе текущим состоянием назначения на Personal Root.
-
-Связь account↔Personal Root не является ownership и не распространяется на descendants.
-
-Конкретный технический механизм создания initial ADMIN и Personal Root, способ задания или предоставления initial login/password и техническое представление bootstrap-состояния относительно начальной границы change log на уровне `RequirementsAnalysis` не определяются.
+Конкретный технический механизм bootstrap System Root и его initial representation относительно начальной границы change log на уровне `RequirementsAnalysis` не определяется.
 
 Это единственное исключение из обычной цепочки:
 
@@ -238,29 +228,39 @@ existing ADMIN
 
 Initial ADMIN появляется до того, как такой existing ADMIN вообще существует.
 
+### SCOPE-SYSTEM-ROOT
+
+В Backend V1 существует ровно один `System Root`:
+
+```text
+SYSTEM
+→ exactly one System Root
+```
+
+System Root является единственной структурной верхушкой физического файлового дерева. Все ordinary folders/files находятся в дереве под ним; конкретная бизнес-структура descendants не фиксируется.
+
+System Root:
+
+```text
+→ bootstrap structural state
+→ не создаётся через CREATE_FOLDER
+→ не связан обязательно с account
+→ не создаёт ACL
+→ не предоставляет non-admin permissions
+→ RENAME самого root запрещён
+→ MOVE самого root запрещён
+→ DELETE самого root запрещён
+```
+
+Структурные запреты действуют также для ADMIN. Ordinary descendants System Root подчиняются общей file-tree/ACL/versioning/conflict/hidden-ancestor/change-log/sync семантике.
+
 ### SCOPE-FILE-TREE
 
 Управление иерархическим файловым деревом: создание папок, просмотр содержимого доступной папки с получением сведений о непосредственных дочерних элементах, включая метаданные перечисленных файлов, переименование, перемещение и удаление файлов и папок, а также отдельное прямое получение метаданных конкретного файла.
 
-Каждая существующая пользовательская account имеет **ровно одну Personal Root folder**:
+Физическое дерево начинается от единственного `System Root`. Обычная account не имеет обязательной физической root-folder и может иметь ноль, один или несколько независимых ACL entry points. Нормально, если существующая account не имеет ни одного доступного file-tree object.
 
-```text
-USER ACCOUNT
-→ exactly one Personal Root
-```
-
-Personal Root является стабильной структурной точкой начала персональной файловой области account. Она создаётся системой как часть lifecycle account, а не пользователем через `UC-FILE-TREE-CREATE-FOLDER`.
-
-```text
-new account
-→ Personal Root already exists
-→ user can CREATE_FOLDER / UPLOAD inside it
-  по обычным ACL/effective-permission правилам
-```
-
-Сам Personal Root является системной структурной точкой и не может быть объектом обычных `RENAME`, `MOVE` или `DELETE`, в том числе для ADMIN. Его содержимое при этом является обычным файловым деревом: непосредственные и вложенные элементы работают по тем же требованиям к файловым операциям, ACL, versioning, conflict detection, hidden ancestors, change log и sync, что и любые другие обычные file-tree objects.
-
-Связь account↔Personal Root **не является ownership** и не создаёт никакой специальной принадлежности descendants.
+Персональная область пользователя, каталог организации, проекта или любая другая бизнес-область — только ordinary folder, если ADMIN решает её создать и настроить ACL. Специальный тип персонального root не вводится.
 
 ### SCOPE-FILE-CONTENT
 
@@ -337,35 +337,21 @@ B successfully UPLOAD file.pdf
 
 Только администратор системы назначает пользователям наборы разрешений в отношении выбранных папок, изменяет назначенные наборы и отзывает доступ. Назначенный набор разрешений наследуется на вложенные элементы и используется для проверки разрешённости операций пользователя над доступными объектами.
 
-При создании account система автоматически создаёт обычный initial ACL assignment для этой же account на её Personal Root с полным набором файловых permissions Backend V1. После создания это **обычный ACL assignment**, а не второй механизм доступа:
+Создание account само по себе не создаёт файлового ACL assignment и не предоставляет file access. Нормальное состояние Backend V1:
 
 ```text
-Personal Root initial ACL assignment
-→ участвует в BR-ACL-EFFECTIVE-PERMISSIONS
-→ наследуется на descendants
-→ участвует в additive union
-→ ADMIN может CHANGE / REVOKE
-→ после REVOKE может быть создан снова обычным GRANT
+account exists
+ACL assignments = 0
+accessible file-tree objects = 0
 ```
 
-Само существование Personal Root или account↔Personal Root association не предоставляет permissions в обход текущего ACL/effective-permission состояния.
+File access появляется только вследствие явного ADMIN `GRANT` к существующей ordinary folder. После этого `GRANT` / `CHANGE` / `REVOKE` работают по существующему `BR-ACL-EFFECTIVE-PERMISSIONS`.
 
 ### SCOPE-INDEPENDENT-PERMISSIONS
 
 Для любого пользователя, не обладающего глобальными административными полномочиями, разрешённость файловых операций над ресурсом определяется исключительно его действующими effective permissions. Создание папки или загрузка файла сами по себе не предоставляют выполнившему операцию пользователю дополнительных permissions и не создают отдельной роли с особыми правами.
 
-Personal Root не является исключением из permission-модели:
-
-```text
-account ↔ Personal Root association
-→ structural relation only
-→ itself grants no file permissions
-
-initial full ACL assignment
-→ обычное основание permissions
-```
-
-Если ADMIN изменил или отозвал initial assignment, дальнейшие возможности non-admin пользователя определяются только текущими ACL/effective permissions. Никакого скрытого неизменяемого права на Personal Root нет.
+Создание account само по себе не создаёт ACL assignments и не предоставляет файлового доступа. Account может иметь ноль доступных file-tree objects; subsequent non-admin file access появляется только через текущие ACL/effective permissions.
 
 Независимо определяются разрешения на:
 
@@ -454,11 +440,50 @@ DELETE отсутствует хотя бы на одном descendant
 
 Право просмотра содержимого файла не предоставляет право получения исходного файла. Право создания папок не предоставляет право загрузки новых файлов, и право загрузки новых файлов не предоставляет право создания папок. Право загрузки нового файла не предоставляет автоматически право изменять, переименовывать, перемещать или удалять этот файл. Право переименования не предоставляет право перемещения, и право перемещения не предоставляет право переименования. Создание или загрузка объекта пользователем не предоставляет ему автоматически дополнительных разрешений на этот объект.
 
-Администратор системы является единственным пользователем, чьи global administrative powers позволяют выполнять файловые операции независимо от ACL/effective permissions. Структурные запреты самого Personal Root не являются permission-проверкой и поэтому применяются также к ADMIN.
+Администратор системы является единственным пользователем, чьи global administrative powers позволяют выполнять файловые операции независимо от ACL/effective permissions. Структурные запреты самого System Root не являются permission-проверкой и поэтому применяются также к ADMIN.
+
+### SCOPE-USER-ROOT-VIEW
+
+Для non-admin backend предоставляет логический `User Root View` — представление текущих доступных top-level entry points, а не physical folder.
+
+```text
+User Root View
+→ computed projection
+→ not a folder
+→ not an ACL record
+→ no independent permissions
+```
+
+Он вычисляется из current file tree, ACL assignments, effective permissions, hidden-ancestor rules и current administrative status.
+
+Top-level rule:
+
+```text
+folder is accessible/disclosable
+AND no accessible ancestor should contain it in visible tree
+→ folder appears as top-level entry
+```
+
+Пример:
+
+```text
+A  inaccessible
+└── B  inaccessible
+    └── C  accessible
+        └── D  accessible
+
+User Root View:
+C
+└── D
+```
+
+Если `B` становится доступен, view становится `B → C → D`, а `C` больше не дублируется отдельным top-level entry. Если доступ к `B` утрачен при сохранении доступа к `C`, `C` снова может стать top-level.
+
+Для ADMIN flattened User Root View не обязателен: API должен позволять работать непосредственно с System Root и полной physical hierarchy. UI будущего клиента здесь не определяется.
 
 ### SCOPE-HIDDEN-ANCESTORS
 
-Пользователь, которому предоставлен доступ к вложенной папке, видит эту папку и доступное содержимое внутри неё, но не получает доступ и не видит родительскую структуру, если отдельного права на неё у него нет.
+Пользователь, которому предоставлен доступ к вложенной папке, видит эту папку и доступное содержимое внутри неё, но не получает доступ и не видит родительскую структуру, если отдельного права на неё у него нет. В User Root View такая папка является top-level entry, пока отсутствует доступный ancestor, который должен содержать её в видимой структуре. Для физического пути `A/B/C`, если доступ разрешён начиная только с `C`, backend не раскрывает identifiers, names, metadata, existence или hierarchy `A` и `B`.
 
 Для проверок уникальности имени действует узкое исключение. `CREATE_FOLDER`, `UPLOAD`, `RENAME` и `MOVE` обязаны учитывать все непосредственные дочерние элементы соответствующей родительской или целевой папки, включая скрытые и недоступные пользователю. Если выбранное имя занято таким объектом, операция не выполняется.
 
@@ -490,7 +515,7 @@ REVOKE_ADMIN
 
 Для любого изменения, которое по требованиям должно фиксироваться в этом журнале, успешное применение изменения и появление соответствующей записи в журнале образуют **единый успешный результат операции**. Не допускается состояние, в котором такое изменение считается успешно применённым, но соответствующая запись отсутствует в журнале изменений.
 
-При успешном `BP-ADMIN-CREATE-USER` создание Personal Root является изменением файлового дерева, а initial ACL assignment — состоянием доступа. Оба должны быть согласованы с change log как часть того же успешного результата создания пользовательской среды. Конкретное количество записей и их технический формат не определяются.
+System Root является bootstrap structural state; его technical initial representation относительно начала change log на этом уровне не определяется. `CREATE USER` больше не создаёт автоматически folder или ACL assignment и поэтому не порождает неявных file-tree/ACL changes.
 
 ### SCOPE-DELETION-TRACKING
 
@@ -498,7 +523,7 @@ REVOKE_ADMIN
 
 Если удаляется папка вместе со всем поддеревом, change log должен содержать достаточное отражение удаления **всех затронутых объектов**, чтобы sync-клиенты могли убрать их из локального состояния. Требования пока не определяют, представляется это одной записью поддерева или несколькими записями объектов.
 
-Personal Root не является допустимым объектом `DELETE`; deletion tracking применяется к обычным удаляемым объектам и не отменяет `BR-ACCOUNT-PERSONAL-ROOT`.
+System Root не является допустимым объектом `DELETE`; deletion tracking применяется к ordinary removable objects и не отменяет `BR-SYSTEM-ROOT`.
 
 ### SCOPE-SYNC-PROTOCOL
 
@@ -564,6 +589,12 @@ ADMIN
 - response size limits;
 - политика retention журнала.
 
+
+
+Для non-admin incremental convergence также должна сохранять актуальную `User Root View`. Если ACL transition делает доступным ancestor текущего top-level subtree, descendant перестаёт дублироваться top-level и становится вложенным; если доступ к ancestor утрачен, но descendant остаётся доступен, descendant может снова стать top-level. Эти переходы не должны раскрывать hidden physical ancestors.
+
+Initial sync, full sync и cursor recovery этой задачей не вводятся; это отдельный следующий блок.
+
 ### SCOPE-VERSIONING
 
 Система хранит текущую версию каждого изменяемого файла или узла. Изменение содержимого, переименование и перемещение существующего объекта выполняются относительно известной вызывающей стороне версии объекта и при успешном выполнении изменяют его текущую версию. Удаление существующего объекта также выполняется относительно известной вызывающей стороне версии и должно отклоняться, если эта версия устарела.
@@ -572,7 +603,7 @@ ADMIN
 
 Создание новой папки или загрузка нового файла не требуют версии создаваемого объекта, поскольку до операции он не существует.
 
-Personal Root не является допустимым target для `RENAME`, `MOVE` или `DELETE`; наличие current version не отменяет этот структурный запрет.
+System Root не является допустимым target для `RENAME`, `MOVE` или `DELETE`; наличие current version не отменяет этот структурный запрет.
 
 ### SCOPE-CONFLICT
 
@@ -674,9 +705,9 @@ Files On-Demand и виртуализация локального файлов�
 
 **Актор:** ACTOR-ADMIN
 
-**Действие:** Создаёт обычную учётную запись пользователя без глобальных административных полномочий, задаёт её первоначальные login и password и инициирует создание её Personal Root с первоначальным полным ACL assignment.
+**Действие:** Создаёт обычную учётную запись пользователя без global administrative powers и задаёт initial login/password.
 
-**Цель:** Предоставить пользователю готовую non-admin account с initial credentials и существующей Personal Root, внутри которой пользователь может создавать первое содержимое по обычным ACL/effective-permission правилам.
+**Цель:** Предоставить пользователю non-admin account с credentials для subsequent authentication; файловый доступ после создания может полностью отсутствовать до отдельного ADMIN `GRANT`.
 
 **Запускает процесс:** BP-ADMIN-CREATE-USER
 
@@ -684,14 +715,8 @@ Files On-Demand и виртуализация локального файлов�
 
 * SCOPE-AUTH
 * SCOPE-ADMINISTRATION
-* SCOPE-FILE-TREE
-* SCOPE-ACL
-* SCOPE-INDEPENDENT-PERMISSIONS
-* SCOPE-CHANGE-LOG
 * BR-AUTH-PASSWORD-NON-DISCLOSURE
 * BR-ACCOUNT-STABLE-IDENTITY
-* BR-ACCOUNT-PERSONAL-ROOT
-* BR-ACL-EFFECTIVE-PERMISSIONS
 
 ## UC-ADMIN-GRANT-ADMIN
 
@@ -729,7 +754,6 @@ Files On-Demand и виртуализация локального файлов�
 * SCOPE-CHANGE-LOG
 * SCOPE-INDEPENDENT-PERMISSIONS
 * BR-ADMIN-AT-LEAST-ONE-ADMIN
-* BR-ACCOUNT-PERSONAL-ROOT
 
 ## UC-ADMIN-RESET-USER-PASSWORD
 
@@ -882,7 +906,7 @@ Files On-Demand и виртуализация локального файлов�
 * SCOPE-VERSIONING
 * SCOPE-CONFLICT
 * SCOPE-CHANGE-LOG
-* BR-ACCOUNT-PERSONAL-ROOT
+* BR-SYSTEM-ROOT
 
 ## UC-FILE-TREE-MOVE
 
@@ -901,7 +925,7 @@ Files On-Demand и виртуализация локального файлов�
 * SCOPE-VERSIONING
 * SCOPE-CONFLICT
 * SCOPE-CHANGE-LOG
-* BR-ACCOUNT-PERSONAL-ROOT
+* BR-SYSTEM-ROOT
 
 ## UC-FILE-TREE-DELETE
 
@@ -921,7 +945,7 @@ Files On-Demand и виртуализация локального файлов�
 * SCOPE-VERSIONING
 * SCOPE-CONFLICT
 * SCOPE-CHANGE-LOG
-* BR-ACCOUNT-PERSONAL-ROOT
+* BR-SYSTEM-ROOT
 
 ## UC-FILE-TREE-GET-FILE-METADATA
 
@@ -1094,6 +1118,8 @@ Files On-Demand и виртуализация локального файлов�
 * SCOPE-INDEPENDENT-PERMISSIONS
 * SCOPE-HIDDEN-ANCESTORS
 * SCOPE-ADMINISTRATION
+* SCOPE-USER-ROOT-VIEW
+* BR-USER-ROOT-VIEW
 
 # Бизнес-правила
 
@@ -1184,7 +1210,6 @@ Login — изменяемое аутентификационное имя су�
 ```text
 ADMIN changes login
 → тот же user identity
-→ та же Personal Root association
 → те же ACL assignments
 → та же audit history
 → тот же administrative status
@@ -1212,112 +1237,39 @@ new login
 → используется вместо него
 ```
 
-Изменение или reset password также не меняют stable identity или связь account с той же Personal Root.
+Изменение или reset password также не меняют stable identity account.
 
 Конкретный технический формат stable identity (`UUID`, integer и т. п.) на уровне `RequirementsAnalysis` не определяется.
 
-**Связи:** ACTOR-USER, ACTOR-ADMIN, SCOPE-AUTH, SCOPE-ADMINISTRATION, UC-ADMIN-CREATE-USER, UC-AUTH-AUTHENTICATE, UC-AUTH-GET-CURRENT-USER, UC-AUTH-CHANGE-PASSWORD, UC-ADMIN-RESET-USER-PASSWORD, UC-ADMIN-CHANGE-USER-LOGIN, BP-ADMIN-CREATE-USER, BP-AUTH-CHANGE-PASSWORD, BP-ADMIN-RESET-USER-PASSWORD, BP-ADMIN-CHANGE-USER-LOGIN, BR-ACCOUNT-PERSONAL-ROOT
+**Связи:** ACTOR-USER, ACTOR-ADMIN, SCOPE-AUTH, SCOPE-ADMINISTRATION, UC-ADMIN-CREATE-USER, UC-AUTH-AUTHENTICATE, UC-AUTH-GET-CURRENT-USER, UC-AUTH-CHANGE-PASSWORD, UC-ADMIN-RESET-USER-PASSWORD, UC-ADMIN-CHANGE-USER-LOGIN, BP-ADMIN-CREATE-USER, BP-AUTH-CHANGE-PASSWORD, BP-ADMIN-RESET-USER-PASSWORD, BP-ADMIN-CHANGE-USER-LOGIN
 
-## BR-ACCOUNT-PERSONAL-ROOT — Personal Root является стабильной структурной связью account
+## BR-SYSTEM-ROOT — System Root является неизменяемой structural root
 
-Каждая существующая user account имеет ровно одну связанную с ней Personal Root folder:
-
-```text
-existing account
-→ exactly one Personal Root
-```
-
-Personal Root — системная структурная точка начала персональной файловой области account. Связь:
+В Backend V1 существует ровно один System Root, создаваемый как bootstrap structural state вне ordinary `CREATE_FOLDER`.
 
 ```text
-account ↔ Personal Root
-```
-
-не является ownership, не создаёт специальной роли и не распространяет никакую специальную принадлежность или права на descendants.
-
-Для обычной account Personal Root создаётся системой как часть `BP-ADMIN-CREATE-USER`. Для initial ADMIN она формируется как часть `SCOPE-INITIAL-ADMIN`. Пользователь не создаёт Personal Root через `UC-FILE-TREE-CREATE-FOLDER`.
-
-Одновременно с Personal Root создаётся обычный initial ACL assignment той же account на Personal Root с полным набором:
-
-```text
-LIST_FOLDER
-GET_FILE_METADATA
-VIEW
-DOWNLOAD
-CREATE_FOLDER
-UPLOAD
-UPDATE
-RENAME
-MOVE
-DELETE
-```
-
-Это назначение является обычным ACL assignment:
-
-```text
-→ участвует в BR-ACL-EFFECTIVE-PERMISSIONS
-→ наследуется на descendants
-→ участвует в additive union
-→ может быть CHANGE / REVOKE администратором
-→ после REVOKE может быть создано снова обычным GRANT
-```
-
-Поэтому само существование Personal Root не предоставляет non-admin пользователю скрытых или неизменяемых прав. Если initial assignment изменён или отозван, дальнейший доступ определяется текущими ACL/effective permissions.
-
-Для обычного пользователя успешный `BP-ADMIN-CREATE-USER` означает единое согласованное состояние:
-
-```text
-account exists
-AND Personal Root exists
-AND account ↔ Personal Root association exists
-AND full initial ACL assignment exists
-AND required file-tree / ACL changes are reflected in change log
-```
-
-Не допускаются успешные состояния:
-
-```text
-account exists
-Personal Root absent
-```
-
-или:
-
-```text
-account exists
-Personal Root exists
-initial ACL assignment absent
-```
-
-Конкретный технический транзакционный механизм не определяется.
-
-Сам Personal Root нельзя изменить так, чтобы он перестал быть стабильным root account:
-
-```text
-Personal Root
+System Root
+→ physical tree root
+→ no automatic ACL
+→ no automatic permissions
 → RENAME forbidden
 → MOVE forbidden
 → DELETE forbidden
 ```
 
-Эти ограничения действуют независимо от наличия `RENAME`, `MOVE`, `DELETE` и также для ADMIN. Они являются структурным инвариантом, а не permission-проверкой.
+Запреты действуют независимо от `RENAME`/`MOVE`/`DELETE`, caller-known version и ADMIN bypass. Проверка structural root выполняется до обычных permission/version checks. Ordinary descendants System Root работают по общей модели.
 
-Permissions на Personal Root остаются обычными permissions и применяются к нормальной работе с её содержимым и descendants. Например, Personal Root может быть parent для `CREATE_FOLDER`, `UPLOAD` и target folder для `MOVE` обычного объекта, если соответствующие обычные проверки успешны.
+**Связи:** ACTOR-ADMIN, SCOPE-INITIAL-ADMIN, SCOPE-SYSTEM-ROOT, SCOPE-FILE-TREE, SCOPE-ADMINISTRATION, SCOPE-VERSIONING, UC-FILE-TREE-RENAME, UC-FILE-TREE-MOVE, UC-FILE-TREE-DELETE, BP-FILE-TREE-CREATE-FOLDER, BP-FILE-TREE-RENAME, BP-FILE-TREE-MOVE, BP-FILE-TREE-DELETE
 
-Все descendants Personal Root — обычные file-tree objects:
+## BR-USER-ROOT-VIEW — логическая проекция доступных top-level folders
 
-```text
-Personal Root
-├── Documents
-│   └── report.pdf
-└── Photos
+Для non-admin folder является top-level entry, если она доступна/раскрываема и в пользовательской видимой структуре нет доступного ancestor, который должен её содержать.
 
-Documents / report.pdf / Photos
-→ ordinary file-tree semantics
-→ ordinary ACL / versioning / conflict / change-log rules
-```
+При появлении доступного ancestor прежний top-level descendant становится вложенным и не дублируется. При утрате такого ancestor доступный descendant снова может стать top-level. Hidden physical ancestors не раскрываются.
 
-**Связи:** ACTOR-USER, ACTOR-ADMIN, SCOPE-AUTH, SCOPE-INITIAL-ADMIN, SCOPE-FILE-TREE, SCOPE-ACL, SCOPE-INDEPENDENT-PERMISSIONS, SCOPE-CHANGE-LOG, UC-ADMIN-CREATE-USER, UC-FILE-TREE-RENAME, UC-FILE-TREE-MOVE, UC-FILE-TREE-DELETE, BP-ADMIN-CREATE-USER, BP-ADMIN-REVOKE-ADMIN, BP-ADMIN-MANAGE-ACCESS, BP-FILE-TREE-RENAME, BP-FILE-TREE-MOVE, BP-FILE-TREE-DELETE, BR-ACL-EFFECTIVE-PERMISSIONS
+User Root View вычисляется из current file tree + ACL assignments + effective permissions + hidden-ancestor rules + administrative status. Это не folder, не ACL record и не самостоятельный носитель permissions. ADMIN может работать непосредственно с System Root.
+
+**Связи:** ACTOR-USER, ACTOR-ADMIN, SCOPE-USER-ROOT-VIEW, SCOPE-HIDDEN-ANCESTORS, SCOPE-FILE-TREE, SCOPE-ACL, SCOPE-INDEPENDENT-PERMISSIONS, SCOPE-SYNC-PROTOCOL, UC-SYNC-GET-CHANGES, BP-SYNC-GET-CHANGES, BR-ACL-EFFECTIVE-PERMISSIONS
 
 ## BR-FILE-TREE-UNIQUE-CHILD-NAME — уникальность имени непосредственного дочернего элемента
 
@@ -1426,7 +1378,7 @@ DOWNLOAD = запрещено
 → дополнительные metadata или content из этого не следуют
 ```
 
-То же правило применяется к `RENAME`, `MOVE` и `DELETE` для объектов, которые являются допустимыми targets этих операций. Personal Root не является допустимым target `RENAME`, `MOVE` или `DELETE`, поэтому current version не отменяет `BR-ACCOUNT-PERSONAL-ROOT`.
+То же правило применяется к `RENAME`, `MOVE` и `DELETE` для объектов, которые являются допустимыми targets этих операций. System Root не является допустимым target `RENAME`, `MOVE` или `DELETE`, поэтому current version не отменяет `BR-SYSTEM-ROOT`.
 
 Предоставление current version само по себе **не предоставляет**:
 
@@ -1522,62 +1474,46 @@ effective permissions на B и descendants = {VIEW}
 
 Таким образом, ACL-модель Backend V1 является **additive union model**: более глубокое назначение может только добавить разрешения к другим применимым назначениям; пустой set не отнимает разрешения; `REVOKE` удаляет только конкретное основание доступа.
 
-Initial full ACL assignment account на её Personal Root после создания участвует в этой же модели на общих основаниях. Он наследуется на descendants, объединяется с другими применимыми assignments и может быть изменён или отозван ADMIN. Никакого отдельного неизменяемого permission из связи account↔Personal Root не существует.
+Создание account не создаёт automatic ACL assignment. Account может иметь ноль, одно или несколько явных ACL assignments на разных folders; все они участвуют в той же additive-union модели.
 
-**Связи:** SCOPE-ACL, SCOPE-INDEPENDENT-PERMISSIONS, BP-ADMIN-MANAGE-ACCESS, BP-ADMIN-CREATE-USER, UC-ADMIN-GRANT-ACCESS, UC-ADMIN-CHANGE-ACCESS, UC-ADMIN-REVOKE-ACCESS, BR-ACCOUNT-PERSONAL-ROOT
+**Связи:** SCOPE-ACL, SCOPE-INDEPENDENT-PERMISSIONS, BP-ADMIN-MANAGE-ACCESS, BP-ADMIN-CREATE-USER, UC-ADMIN-GRANT-ACCESS, UC-ADMIN-CHANGE-ACCESS, UC-ADMIN-REVOKE-ACCESS, BR-USER-ROOT-VIEW
 
 # Бизнес-процессы
 
 ## BP-ADMIN-CREATE-USER — создание обычной учётной записи администратором
 
-Аутентифицированный ADMIN создаёт новую обычную учётную запись пользователя без global administrative powers, задаёт initial credentials — login и password — и получает готовую первоначальную файловую среду account: Personal Root и full initial ACL assignment.
+Аутентифицированный ADMIN создаёт новую ordinary non-admin account и задаёт initial credentials — login/password. File-tree lifecycle от этого процесса отделён.
 
 **Последовательность:**
 
-1. **Передача данных.** ADMIN передаёт данные новой обычной учётной записи, включая initial login и initial password, достаточные для последующей authentication.
-2. **Проверка административной сессии.** Система проверяет действующую пользовательскую session и наличие global administrative powers у текущей учётной записи. Без обоих условий учётная запись не создаётся.
-3. **Проверка данных.** Система проверяет достаточность и допустимость данных, включая допустимость initial login/password. При ошибке account не создаётся.
-4. **Проверка существующей учётной записи.** Initial login и другие данные, для которых требуется отсутствие конфликта, не должны конфликтовать с существующей account. Если конфликт есть, новая account не создаётся. Конкретные правила нормализации/comparison login на этом уровне не определяются.
-5. **Создание согласованной среды account.** Система формирует как один успешный результат:
-   - новую non-admin account со stable identity, initial login и initial password;
-   - ровно одну связанную Personal Root;
-   - account↔Personal Root association;
-   - обычный ACL assignment этой account на Personal Root с полным набором `LIST_FOLDER`, `GET_FILE_METADATA`, `VIEW`, `DOWNLOAD`, `CREATE_FOLDER`, `UPLOAD`, `UPDATE`, `RENAME`, `MOVE`, `DELETE`;
-   - требуемое отражение создания Personal Root и initial ACL state в едином change log.
+1. **Передача данных.** ADMIN передаёт данные новой account, включая initial login/password.
+2. **Проверка administrative session.** Система проверяет valid non-expired session и current global administrative powers.
+3. **Проверка данных.** Проверяются достаточность и допустимость account data, login/password.
+4. **Проверка конфликтов.** Initial login и другие требующие уникальности данные не должны конфликтовать с существующей account; exact normalization/comparison здесь не определяется.
+5. **Создание account.** Система создаёт non-admin account со stable identity, active initial login и active initial password.
 
-Если Personal Root, association, initial ACL assignment или обязательное change-log отражение создать невозможно, `BP-ADMIN-CREATE-USER` **не считается успешно завершённым**. Недопустимо считать account успешно созданной без этих элементов. Конкретный технический транзакционный механизм на этом уровне не определяется.
+`BP-ADMIN-CREATE-USER` **не создаёт** folder, file-tree object или ACL assignment.
 
-**Успешный результат:** существует новая non-admin account со stable identity и initial credentials, ровно одна Personal Root и full initial ACL assignment на ней.
+**Успешный результат:**
 
 ```text
-BP-ADMIN-CREATE-USER
-→ account exists
-→ exactly one Personal Root exists
-→ account ↔ Personal Root association exists
-→ full initial ACL assignment exists
-→ root / ACL changes согласованы с change log
-→ ADMIN = no
-→ user session for new account не создаётся
+account exists
+AND stable identity exists
+AND initial login active
+AND initial password active
+AND ADMIN = no
 ```
 
-После самостоятельной authentication пользователь уже имеет существующую parent folder для первого содержимого:
+Нормально и допустимо одновременно:
 
 ```text
-new account
-→ Personal Root exists
-→ CREATE_FOLDER inside Personal Root
-→ UPLOAD inside Personal Root
+ACL assignments = 0
+accessible file-tree objects = 0
 ```
 
-Обе операции выполняются по обычным ACL/effective-permission правилам. Связь account↔Personal Root не является ownership и сама по себе не предоставляет permissions.
+File access появляется только после отдельного `BP-ADMIN-MANAGE-ACCESS` к существующей ordinary folder. User session для новой account этим процессом не создаётся. ADMIN, задавший initial password, не получает возможности позднее прочитать current password. Mandatory first-login password change не вводится. Для administrative powers используется отдельный `BP-ADMIN-GRANT-ADMIN`.
 
-ADMIN задаёт initial password как входные данные создания, но система не предоставляет ему возможности позднее прочитать текущий password account.
-
-Обязательная смена password при первом входе **не вводится**.
-
-Если позднее пользователю нужны административные полномочия, используется отдельный `BP-ADMIN-GRANT-ADMIN`.
-
-**Связи:** ACTOR-ADMIN, ACTOR-USER, UC-ADMIN-CREATE-USER, SCOPE-AUTH, SCOPE-ADMINISTRATION, SCOPE-FILE-TREE, SCOPE-ACL, SCOPE-INDEPENDENT-PERMISSIONS, SCOPE-CHANGE-LOG, BR-AUTH-PASSWORD-NON-DISCLOSURE, BR-ACCOUNT-STABLE-IDENTITY, BR-ACCOUNT-PERSONAL-ROOT, BR-ACL-EFFECTIVE-PERMISSIONS
+**Связи:** ACTOR-ADMIN, UC-ADMIN-CREATE-USER, SCOPE-AUTH, SCOPE-ADMINISTRATION, BR-AUTH-PASSWORD-NON-DISCLOSURE, BR-ACCOUNT-STABLE-IDENTITY
 
 ## BP-ADMIN-GRANT-ADMIN — предоставление глобальных административных полномочий
 
@@ -1616,17 +1552,14 @@ GRANT_ADMIN successful
 2. **Проверка административной сессии.** Система проверяет действительность сессии и текущие global administrative powers вызывающего пользователя. Без обоих условий операция не выполняется.
 3. **Проверка цели.** Целевая учётная запись должна существовать и в текущий момент быть ADMIN.
 4. **Проверка инварианта.** Система проверяет `BR-ADMIN-AT-LEAST-ONE-ADMIN`. Если выбранная учётная запись является последним текущим ADMIN, операция запрещается.
-5. **Снятие полномочий и change log.** Система снимает global administrative powers и фиксирует соответствующее изменение прав доступа в едином change log. Сама account, её Personal Root и существующие ACL assignments, включая текущее назначение на Personal Root, этой операцией не изменяются. После demotion файловые действия account определяются как для любого non-admin через применимые ACL и `BR-ACL-EFFECTIVE-PERMISSIONS`.
+5. **Снятие полномочий и change log.** Система снимает global administrative powers и фиксирует изменение прав доступа в едином change log как единый successful result. Сама account и её существующие ACL assignments сохраняются. После demotion последующие file operations выполняются как для любого non-admin и определяются current ACL/effective permissions.
 
-Если initial full assignment на Personal Root ранее не изменён и не отозван, после demotion он продолжает давать соответствующие effective permissions. Если он был изменён или отозван, используется его текущее ACL-состояние.
-
-**Успешный результат:** выбранная account продолжает существовать с той же Personal Root, но больше не имеет административного bypass.
+**Успешный результат:** выбранная account продолжает существовать как non-admin, больше не имеет global administrative bypass, соответствующее access change присутствует в change log, а в системе остаётся минимум один ADMIN.
 
 ```text
 admins = {A, B}
 A revokes B
 → B becomes NON-ADMIN
-→ B Personal Root unchanged
 → B existing ACL assignments unchanged
 → subsequent B file access определяется current ACL/effective permissions
 → admins = {A}
@@ -1641,9 +1574,9 @@ REVOKE_ADMIN(A)
 → A remains ADMIN
 ```
 
-Конкретный механизм обновления уже существующей сессии не определяется; последующие проверки обязаны использовать фактический текущий административный статус.
+Конкретный механизм обновления уже существующей session не определяется; subsequent checks обязаны использовать фактический current administrative status.
 
-**Связи:** ACTOR-ADMIN, UC-ADMIN-REVOKE-ADMIN, SCOPE-ADMINISTRATION, SCOPE-AUTH, SCOPE-INITIAL-ADMIN, SCOPE-INDEPENDENT-PERMISSIONS, SCOPE-CHANGE-LOG, BR-ADMIN-AT-LEAST-ONE-ADMIN, BR-ACCOUNT-PERSONAL-ROOT, BR-ACL-EFFECTIVE-PERMISSIONS
+**Связи:** ACTOR-ADMIN, UC-ADMIN-REVOKE-ADMIN, SCOPE-ADMINISTRATION, SCOPE-AUTH, SCOPE-INITIAL-ADMIN, SCOPE-INDEPENDENT-PERMISSIONS, SCOPE-CHANGE-LOG, BR-ADMIN-AT-LEAST-ONE-ADMIN, BR-ACL-EFFECTIVE-PERMISSIONS
 
 ## BP-ADMIN-RESET-USER-PASSWORD — административный reset password
 
@@ -1678,7 +1611,8 @@ ADMIN resets own password through admin reset
 
 **Успешный результат:** new password является действующим password той же account, old password больше не действует, все ранее существовавшие target sessions/renewal-basis недействительны. Для продолжения работы пользователь должен снова пройти `BP-AUTH-AUTHENTICATE` с current login и new password.
 
-Reset не меняет stable identity, связь account с той же Personal Root, login, ACL assignments, audit history или administrative status target account.
+Reset не меняет stable identity, login, ACL assignments, audit history или administrative status target account.
+
 
 **Связи:** ACTOR-ADMIN, UC-ADMIN-RESET-USER-PASSWORD, UC-AUTH-AUTHENTICATE, UC-AUTH-RENEW-SESSION, SCOPE-AUTH, SCOPE-ADMINISTRATION, BR-AUTH-PASSWORD-NON-DISCLOSURE, BR-ACCOUNT-STABLE-IDENTITY
 
@@ -1691,8 +1625,8 @@ Reset не меняет stable identity, связь account с той же Perso
 1. **Запрос изменения.** ADMIN указывает target account и new login.
 2. **Проверка административной сессии.** Система проверяет valid non-expired session и current global administrative powers вызывающего пользователя. При отрицательном результате login не изменяется.
 3. **Проверка target.** Target account должна существовать. ADMIN может изменить login обычной account, другой ADMIN-account или собственной account.
-4. **Проверка login.** New login должен быть допустим и не конфликтовать с login другой существующей account. Target account исключается из self-conflict. Конкретные normalization/comparison rules на этом уровне не определяются.
-5. **Применение.** Система заменяет login той же account. Old login перестаёт использоваться для subsequent password-authentication, new login используется вместо него. Personal Root association, password, ACL assignments, audit history, administrative status, existing sessions и valid renewal basis не меняются только вследствие login change.
+4. **Проверка login.** New login должен быть допустим и не конфликтовать с login другой existing account. Target account исключается из self-conflict. Exact normalization/comparison rules на этом уровне не определяются.
+5. **Применение.** Система заменяет login той же account. Old login перестаёт использоваться для subsequent password-authentication; new login используется вместо него. Stable identity, password, ACL assignments, audit history, administrative status, existing sessions и valid renewal basis не меняются только вследствие login change.
 
 Если new login недопустим или занят:
 
@@ -1700,11 +1634,10 @@ Reset не меняет stable identity, связь account с той же Perso
 → login не изменяется
 ```
 
-Успешная смена login **не меняет identity**:
+**Успешный результат:** та же account использует new login для subsequent authentication; old login больше не идентифицирует её для password-authentication, а identity, ACL/audit/admin/session state сохраняются.
 
 ```text
 same user identity
-same Personal Root association
 same password
 same ACL assignments
 same audit history
@@ -1831,13 +1764,14 @@ all pre-change renewal basis invalid
 
 После завершения сохранившейся current session продолжение без reauthentication возможно только при наличии нового valid renewal basis, появившегося после password change; иначе пользователь проходит normal authentication с new password.
 
-Stable identity, связь с той же Personal Root, login, ACL assignments, audit history и administrative status account не изменяются.
+Stable identity, login, ACL assignments, audit history и administrative status account не изменяются.
+
 
 **Связи:** ACTOR-USER, ACTOR-ADMIN, UC-AUTH-CHANGE-PASSWORD, UC-AUTH-AUTHENTICATE, UC-AUTH-RENEW-SESSION, SCOPE-AUTH, BR-AUTH-PASSWORD-NON-DISCLOSURE, BR-ACCOUNT-STABLE-IDENTITY
 
 ## BP-FILE-TREE-CREATE-FOLDER — создание папки
 
-Аутентифицированный пользователь создаёт новую папку непосредственно внутри выбранной родительской папки, если пользовательская сессия действительна и операция создания папок разрешена для этого пользователя в отношении родительской папки либо пользователь является администратором системы. Успешное создание новой папки включает установку её первоначальной current version и фиксацию создания в едином change log. Personal Root этим процессом не создаётся: он уже существует как системная часть lifecycle account.
+Аутентифицированный пользователь создаёт новую ordinary folder непосредственно внутри выбранной parent folder. Для non-admin требуется `CREATE_FOLDER` на parent; ADMIN обходит permission-check. Initial ADMIN может использовать существующий System Root как parent для первой ordinary folder. Успешное создание включает initial current version и обязательное отражение в change log.
 
 **Последовательность:**
 
@@ -1852,7 +1786,6 @@ Stable identity, связь с той же Personal Root, login, ACL assignments
 
 Создание новой папки **не требует caller-known version**, поскольку до операции она не существует. Сам факт создания папки **не предоставляет создавшему её пользователю дополнительных разрешений на неё**.
 
-Если parent является Personal Root, новая папка остаётся обычным file-tree object. Её permissions возникают только из применимых ACL assignments и наследования; никакая специальная связь account с Personal Root на неё не распространяется.
 
 Для non-admin невозможность использовать указанный parent не должна позволять определить, существует ли скрытая или недоступная папка. Отдельное исключение действует только для проверки имени: `BR-FILE-TREE-HIDDEN-NAME-CONFLICT-DISCLOSURE` разрешает сообщить, что выбранное имя недоступно, не раскрывая конфликтующий скрытый объект. При этом разрешение `CREATE_FOLDER` остаётся независимым от `LIST_FOLDER` и других файловых разрешений.
 
@@ -1862,19 +1795,20 @@ Stable identity, связь с той же Personal Root, login, ACL assignments
 
 * UC-FILE-TREE-CREATE-FOLDER
 * SCOPE-FILE-TREE
+* SCOPE-SYSTEM-ROOT
 * SCOPE-INDEPENDENT-PERMISSIONS
 * SCOPE-VERSIONING
 * SCOPE-CHANGE-LOG
 * SCOPE-ACL
 * SCOPE-HIDDEN-ANCESTORS
 * SCOPE-ADMINISTRATION
-* BR-ACCOUNT-PERSONAL-ROOT
+* BR-SYSTEM-ROOT
 * BR-FILE-TREE-UNIQUE-CHILD-NAME
 * BR-FILE-TREE-HIDDEN-NAME-CONFLICT-DISCLOSURE
 
 ## BP-FILE-TREE-LIST-FOLDER — просмотр содержимого папки
 
-Аутентифицированный пользователь получает перечень непосредственных дочерних элементов выбранной папки. Для файлов, включённых в этот перечень, операция также возвращает их метаданные. Для non-admin операция определяется `LIST_FOLDER`; отдельный `GET_FILE_METADATA` для метаданных внутри результата listing не требуется.
+Аутентифицированный пользователь получает перечень непосредственных дочерних элементов выбранной physical folder. Для ADMIN выбранной папкой может быть System Root; User Root View non-admin является отдельной logical projection, а не physical folder. Для файлов, включённых в этот перечень, операция также возвращает их метаданные. Для non-admin операция определяется `LIST_FOLDER`; отдельный `GET_FILE_METADATA` для метаданных внутри результата listing не требуется.
 
 **Последовательность:**
 
@@ -1887,7 +1821,6 @@ Stable identity, связь с той же Personal Root, login, ACL assignments
 
 **Успешный результат:** пользователь получает доступные непосредственные дочерние файлы и папки выбранной папки и метаданные файлов, включённых в этот результат, без раскрытия скрытой структуры.
 
-Если выбранной папкой является Personal Root, её содержимое перечисляется по тем же ACL/effective-permission правилам, что и содержимое любой другой папки. Связь account с Personal Root не заменяет `LIST_FOLDER`.
 
 Семантика разрешений для этой операции:
 
@@ -1912,19 +1845,20 @@ GET_FILE_METADATA = запрещено
 * SCOPE-INDEPENDENT-PERMISSIONS
 * SCOPE-ACL
 * SCOPE-HIDDEN-ANCESTORS
+* SCOPE-USER-ROOT-VIEW
+* SCOPE-SYSTEM-ROOT
 * SCOPE-ADMINISTRATION
-* BR-ACCOUNT-PERSONAL-ROOT
 
 ## BP-FILE-TREE-RENAME — переименование файла или папки
 
-Аутентифицированный пользователь изменяет имя существующего файла или обычной папки без изменения положения объекта в файловой структуре. Для non-admin требуется отдельное разрешение `RENAME`; администратор обходит permission-проверку. Personal Root не является допустимым target `RENAME` ни для non-admin, ни для ADMIN.
+Аутентифицированный пользователь изменяет имя существующего файла или обычной папки без изменения положения объекта в файловой структуре. Для non-admin требуется отдельное разрешение `RENAME`; администратор обходит permission-проверку. System Root не является допустимым target `RENAME` ни для non-admin, ни для ADMIN.
 
 **Последовательность:**
 
 1. **Запрос переименования.** Пользователь указывает файл или папку, новое имя и известную ему версию объекта.
 2. **Проверка сессии.** Система проверяет, что пользовательская сессия существует, не истекла и остаётся действительной. Без действующей сессии переименование не выполняется.
 3. **Проверка объекта без раскрытия скрытой структуры.** Система определяет, может ли указанный объект участвовать в операции в контексте полномочий пользователя. Для non-admin отрицательный результат не позволяет определить, отсутствует ли объект или существует, но скрыт/недоступен. Для администратора ограничение скрытия не применяется.
-4. **Проверка Personal Root.** Если объект является Personal Root какой-либо существующей account, `RENAME` запрещён как структурное нарушение `BR-ACCOUNT-PERSONAL-ROOT`. Это не permission-проверка, поэтому наличие `RENAME` и global administrative powers ничего не меняет. Root, association, current version и change log не изменяются.
+4. **Проверка System Root.** Если объект является System Root, `RENAME` запрещён как структурное нарушение `BR-SYSTEM-ROOT`. Это не permission-проверка, поэтому наличие `RENAME` и global administrative powers ничего не меняет. Структурное состояние System Root и change log этой попыткой не изменяются; caller-known version не делает операцию допустимой.
 5. **Проверка `RENAME`.** Для non-admin проверяется отдельное разрешение переименования. Оно независимо от `LIST_FOLDER`, `GET_FILE_METADATA`, `MOVE` и остальных разрешений. Для администратора эта проверка операцию не ограничивает.
 6. **Проверка имени.** Новое имя проверяется по `BR-FILE-TREE-UNIQUE-CHILD-NAME` против всех других siblings того же parent. Сравнение выполняется без учёта регистра; для файла полное имя включает extension. Сам переименовываемый объект исключается из проверки. При конфликте переименование не выполняется; для non-admin конфликт со скрытым sibling раскрывается только как недоступность/занятость выбранного имени согласно `BR-FILE-TREE-HIDDEN-NAME-CONFLICT-DISCLOSURE`.
 7. **Проверка версии.** Система сравнивает известную пользователю версию объекта с текущей. Если версия устарела, переименование отклоняется как конфликт без автоматического разрешения. Администратор от этой проверки не освобождается.
@@ -1932,7 +1866,7 @@ GET_FILE_METADATA = запрещено
 
 **Успешный результат:** тот же обычный файл или папка находится в прежнем месте под новым именем, не конфликтующим с именем другого непосредственного дочернего элемента того же родителя, имеет новую текущую версию, а соответствующее изменение присутствует в едином журнале изменений для последующей синхронизации.
 
-Попытка `RENAME` самого Personal Root всегда завершается без изменения root независимо от пользователя и permissions.
+Попытка `RENAME` самого System Root всегда завершается без изменения root независимо от пользователя и permissions.
 
 **Инвариант процесса:** не допускается успешно завершённое переименование, отсутствующее в журнале изменений. Изменение имени, изменение текущей версии и фиксация соответствующего изменения в change log рассматриваются как единый успешный результат операции.
 
@@ -1957,6 +1891,7 @@ MOVE запрещён
 
 * UC-FILE-TREE-RENAME
 * SCOPE-FILE-TREE
+* SCOPE-SYSTEM-ROOT
 * SCOPE-INDEPENDENT-PERMISSIONS
 * SCOPE-VERSIONING
 * SCOPE-CONFLICT
@@ -1964,21 +1899,21 @@ MOVE запрещён
 * SCOPE-ACL
 * SCOPE-HIDDEN-ANCESTORS
 * SCOPE-ADMINISTRATION
-* BR-ACCOUNT-PERSONAL-ROOT
+* BR-SYSTEM-ROOT
 * BR-FILE-TREE-UNIQUE-CHILD-NAME
 * BR-FILE-TREE-HIDDEN-NAME-CONFLICT-DISCLOSURE
 * BR-VERSIONING-CURRENT-VERSION-AVAILABILITY
 
 ## BP-FILE-TREE-MOVE — перемещение файла или папки
 
-Аутентифицированный пользователь изменяет положение существующего файла или обычной папки в файловом дереве. Для non-admin `MOVE` проверяется на самом перемещаемом объекте и в контексте target folder; ADMIN обходит permission-проверки. Personal Root может быть **target folder** обычного перемещения, но сам Personal Root никогда не является перемещаемым объектом.
+Аутентифицированный пользователь изменяет положение существующего файла или обычной папки в файловом дереве. Для non-admin `MOVE` проверяется на самом перемещаемом объекте и в контексте target folder; ADMIN обходит permission-проверки. System Root может быть **target folder** обычного перемещения, но сам System Root никогда не является перемещаемым объектом.
 
 **Последовательность:**
 
 1. **Запрос перемещения.** Пользователь указывает перемещаемый файл или папку, целевую папку и известную ему версию перемещаемого объекта.
 2. **Проверка сессии.** Система проверяет, что пользовательская сессия существует, не истекла и остаётся действительной. Без действующей сессии перемещение не выполняется.
 3. **Проверка объектов без раскрытия скрытой структуры.** Система определяет, могут ли перемещаемый объект и целевая папка участвовать в операции в контексте полномочий пользователя. Для non-admin отрицательный результат в отношении любого из них не позволяет определить, отсутствует ли соответствующий объект или существует, но скрыт/недоступен. Для администратора ограничение скрытия не применяется.
-4. **Проверка Personal Root.** Если перемещаемый объект является Personal Root любой account, `MOVE` запрещён согласно `BR-ACCOUNT-PERSONAL-ROOT` независимо от permissions/admin powers. Personal Root не становится child другой папки, association, version и change log не изменяются.
+4. **Проверка System Root.** Если перемещаемый объект является System Root, `MOVE` запрещён согласно `BR-SYSTEM-ROOT` независимо от permissions/admin powers. System Root не становится child другой папки; его structural state и change log этой попыткой не изменяются, а caller-known version не делает операцию допустимой.
 5. **Проверка `MOVE`.** Для non-admin `MOVE` должен действовать и для самого перемещаемого объекта, и для размещения этого объекта в целевой папке. Проверка target использует то же permission `MOVE`, а не `UPLOAD` или `CREATE_FOLDER`. Отсутствие `LIST_FOLDER`, `GET_FILE_METADATA` и других независимых разрешений само по себе не запрещает перемещение. Для ADMIN permission-проверки не ограничивают операцию.
 6. **Проверка фактического изменения родителя.** Целевая папка должна отличаться от текущей родительской папки перемещаемого объекта. Если выбран текущий родитель, положение объекта не меняется, current version не меняется, change log не меняется, и успешного `MOVE` нет.
 7. **Проверка иерархии.** Папка не может быть перемещена в саму себя или в любую свою вложенную папку.
@@ -1988,7 +1923,7 @@ MOVE запрещён
 
 **Успешный результат:** обычный file/folder становится непосредственным дочерним элементом выбранной target folder, имеет новую current version и соответствующее изменение в change log.
 
-Personal Root может содержать перемещённые в него ordinary objects при успешных обычных проверках. Сам Personal Root никогда не перемещается.
+System Root может содержать перемещённые в него ordinary objects при успешных обычных проверках. Сам System Root никогда не перемещается.
 
 **No-op:** попытка переместить обычный объект в его текущую родительскую папку не изменяет положение, current version, ACL или change log и не считается успешным `MOVE`.
 
@@ -1996,13 +1931,13 @@ Personal Root может содержать перемещённые в него
 
 ```text
 MOVE на объекте = разрешено
-MOVE в Personal Root как target = разрешено
-→ ordinary object может быть перемещён в Personal Root,
+MOVE в System Root как target = разрешено
+→ ordinary object может быть перемещён в System Root,
   если остальные проверки успешны
 ```
 
 ```text
-перемещаемый объект = Personal Root
+перемещаемый объект = System Root
 → MOVE запрещён независимо от permissions и ADMIN
 ```
 
@@ -2012,6 +1947,7 @@ MOVE в Personal Root как target = разрешено
 
 * UC-FILE-TREE-MOVE
 * SCOPE-FILE-TREE
+* SCOPE-SYSTEM-ROOT
 * SCOPE-INDEPENDENT-PERMISSIONS
 * SCOPE-VERSIONING
 * SCOPE-CONFLICT
@@ -2019,21 +1955,21 @@ MOVE в Personal Root как target = разрешено
 * SCOPE-ACL
 * SCOPE-HIDDEN-ANCESTORS
 * SCOPE-ADMINISTRATION
-* BR-ACCOUNT-PERSONAL-ROOT
+* BR-SYSTEM-ROOT
 * BR-FILE-TREE-UNIQUE-CHILD-NAME
 * BR-FILE-TREE-HIDDEN-NAME-CONFLICT-DISCLOSURE
 * BR-VERSIONING-CURRENT-VERSION-AVAILABILITY
 
 ## BP-FILE-TREE-DELETE — удаление файла или поддерева папки
 
-Аутентифицированный пользователь удаляет существующий обычный файл или папку. Удаление обычной папки означает удаление **всей папки вместе со всеми потомками как одной логической операции**. Personal Root никогда не является допустимым root удаления, даже для ADMIN.
+Аутентифицированный пользователь удаляет существующий обычный файл или папку. Удаление обычной папки означает удаление **всей папки вместе со всеми потомками как одной логической операции**. System Root никогда не является допустимым root удаления, даже для ADMIN.
 
 **Последовательность:**
 
 1. **Запрос удаления.** Пользователь указывает удаляемый root — файл или папку — и известную ему версию root.
 2. **Проверка сессии.** Система проверяет, что пользовательская сессия существует, не истекла и остаётся действительной. Без действующей сессии удаление не выполняется.
 3. **Разрешение root без раскрытия скрытой структуры.** Система определяет, может ли root участвовать в операции. Для non-admin отрицательный результат не позволяет определить, отсутствует ли root или существует, но скрыт/недоступен. Для администратора ограничение скрытия не применяется.
-4. **Проверка Personal Root.** Если root является Personal Root любой account, `DELETE` запрещён согласно `BR-ACCOUNT-PERSONAL-ROOT` независимо от `DELETE` permission и global administrative powers. Personal Root, его содержимое, account association, current version и change log этой попыткой не изменяются.
+4. **Проверка System Root.** Если root является System Root, `DELETE` запрещён согласно `BR-SYSTEM-ROOT` независимо от `DELETE` permission и global administrative powers. Structural state System Root и change log этой попыткой не изменяются; caller-known version не делает операцию допустимой.
 5. **Определение затрагиваемого поддерева.** Для обычного файла затрагивается только сам файл. Для обычной папки система внутренне определяет root и всех descendants. Это не требует `LIST_FOLDER` и не раскрывает скрытые вложенные объекты.
 6. **Проверка `DELETE`.** Для non-admin `DELETE` должен действовать на ordinary root и каждый descendant. Если разрешения нет хотя бы на одном затрагиваемом объекте, **не удаляется ничего**. Отказ не раскрывает скрытый descendant. Для ADMIN permission-проверки не ограничивают операцию.
 7. **Проверка версии root.** Caller-known version ordinary root сравнивается с current version. Stale version отклоняет всё удаление. Проверка обязательна и для ADMIN.
@@ -2041,7 +1977,7 @@ MOVE в Personal Root как target = разрешено
 
 **Успешный результат:** ordinary root и все descendants отсутствуют в active tree, а change log достаточно отражает удаление для sync.
 
-Personal Root этим процессом не удаляется и продолжает существовать как единственный root связанной account.
+System Root этим процессом не удаляется и продолжает существовать как единственный structural root системы.
 
 **Инвариант процесса:** удаление ordinary subtree является одной логической операцией. Частичный результат запрещён:
 
@@ -2070,7 +2006,7 @@ session valid
 ↓
 root resolves without disclosure
 ↓
-root is NOT Personal Root
+root is NOT System Root
 ↓
 NON-ADMIN:
     DELETE действует на root + каждый descendant
@@ -2091,6 +2027,7 @@ change log достаточно отражает удаление всех за�
 
 * UC-FILE-TREE-DELETE
 * SCOPE-FILE-TREE
+* SCOPE-SYSTEM-ROOT
 * SCOPE-INDEPENDENT-PERMISSIONS
 * SCOPE-DELETION-TRACKING
 * SCOPE-VERSIONING
@@ -2099,7 +2036,7 @@ change log достаточно отражает удаление всех за�
 * SCOPE-ACL
 * SCOPE-HIDDEN-ANCESTORS
 * SCOPE-ADMINISTRATION
-* BR-ACCOUNT-PERSONAL-ROOT
+* BR-SYSTEM-ROOT
 * BR-VERSIONING-CURRENT-VERSION-AVAILABILITY
 
 ## BP-FILE-TREE-GET-FILE-METADATA — прямое получение метаданных файла
@@ -2181,7 +2118,8 @@ transfer incomplete
 
 При проверке имени учитываются также скрытые siblings с той же case-insensitive семантикой полного имени. Единственная допустимая информация для non-admin при таком конфликте — выбранное имя недоступно; сам скрытый объект остаётся нераскрытым.
 
-Сам факт успешной загрузки **не предоставляет загрузившему пользователю дополнительных разрешений** на новый файл. Если файл находится непосредственно или косвенно внутри Personal Root, он остаётся ordinary file-tree object; доступ к нему следует только из применимых ACL assignments и их наследования.
+Сам факт successful `UPLOAD` не предоставляет uploader дополнительных permissions. Независимо от положения файла под System Root он остаётся ordinary file-tree object; права следуют только из применимых ACL assignments и inheritance.
+
 
 Конкретный механизм resumable/multipart передачи, размер частей, идентификатор незавершённой передачи, срок её хранения и технический формат initial version, change-log записи и audit-записи на данном уровне не определяются.
 
@@ -2197,7 +2135,6 @@ transfer incomplete
 * SCOPE-ACL
 * SCOPE-HIDDEN-ANCESTORS
 * SCOPE-ADMINISTRATION
-* BR-ACCOUNT-PERSONAL-ROOT
 * BR-FILE-TREE-UNIQUE-CHILD-NAME
 * BR-FILE-TREE-HIDDEN-NAME-CONFLICT-DISCLOSURE
 
@@ -2390,15 +2327,15 @@ Controlled view **не является DRM**. Требование гарант
 
 Аутентифицированный администратор управляет назначением разрешений конкретному пользователю в отношении выбранной папки. Один процесс покрывает три AAG-сценария: `GRANT`, `CHANGE` и `REVOKE`. Обычный пользователь не может выполнять этот процесс.
 
-Initial full ACL assignment account на её Personal Root после создания является обычным ACL assignment и управляется этим же процессом без отдельной специальной семантики доступа.
+Создание account не запускает ACL management автоматически; file access появляется только через явный ADMIN `GRANT` к existing folder.
 
 **Последовательность:**
 
 1. **Запрос изменения доступа.** Администратор указывает тип операции (`GRANT`, `CHANGE` или `REVOKE`), целевого пользователя и выбранную папку. Для `GRANT` и `CHANGE` также передаётся набор файловых разрешений.
 2. **Проверка административной сессии.** Система проверяет действительность пользовательской сессии и наличие у текущей учётной записи глобальных административных полномочий. Без обоих условий ACL не изменяется.
 3. **Проверка целевых объектов.** Система проверяет существование целевой учётной записи и выбранной папки. Администратор может управлять доступом к папке независимо от ACL и скрытия структуры. Если пользователь или папка не существуют, ACL не изменяется.
-4. **Проверка типа изменения.** Для `GRANT` и `CHANGE` набор может содержать любую комбинацию файловых permissions из `SCOPE-INDEPENDENT-PERMISSIONS`, включая пустой набор. `GRANT` создаёт назначение для пары пользователь–папка и применяется, когда такого назначения на этой папке ещё нет. `CHANGE` меняет уже существующее назначение. `REVOKE` удаляет уже существующее назначение. `GRANT` не превращается автоматически в `CHANGE`, а `CHANGE`/`REVOKE` не создают отсутствующее назначение. Эти же правила применяются к initial assignment account на её Personal Root: пока assignment существует, применимы `CHANGE`/`REVOKE`; после `REVOKE` обычный `GRANT` может создать его снова.
-5. **Применение и change log.** Успешное изменение ACL и соответствующая запись об изменении прав доступа в едином change log образуют один успешный результат. При `GRANT` назначенный set начинает действовать на выбранной папке и наследоваться на descendants. При `CHANGE` прежний set заменяется новым и далее наследуется уже изменённый set. При `REVOKE` удаляется только соответствующее назначение. После любого изменения effective permissions пользователя вычисляются по `BR-ACL-EFFECTIVE-PERMISSIONS`; `REVOKE` не отменяет permissions, продолжающие предоставляться другими применимыми назначениями. Изменение или отзыв assignment на Personal Root не изменяют существование Personal Root и не разрывают account↔Personal Root association.
+4. **Проверка типа изменения.** Для `GRANT` и `CHANGE` набор может содержать любую комбинацию файловых permissions из `SCOPE-INDEPENDENT-PERMISSIONS`, включая пустой набор. `GRANT` создаёт назначение для пары пользователь–папка и применяется, когда такого назначения на этой папке ещё нет. `CHANGE` меняет уже существующее назначение. `REVOKE` удаляет уже существующее назначение. `GRANT` не превращается автоматически в `CHANGE`, а `CHANGE`/`REVOKE` не создают отсутствующее назначение.
+5. **Применение и change log.** Успешное изменение ACL и соответствующая запись об изменении прав доступа в едином change log образуют один успешный результат. При `GRANT` назначенный set начинает действовать на выбранной папке и наследоваться на descendants. При `CHANGE` прежний set заменяется новым и далее наследуется уже изменённый set. При `REVOKE` удаляется только соответствующее назначение. После любого изменения effective permissions пользователя вычисляются по `BR-ACL-EFFECTIVE-PERMISSIONS`; `REVOKE` не отменяет permissions, продолжающие предоставляться другими применимыми назначениями.
 
 **Успешный результат:**
 
@@ -2441,14 +2378,6 @@ REVOKE
 
 Таким образом, после любой успешной операции управления ACL итоговый effective permission set определяется additive-union правилом `BR-ACL-EFFECTIVE-PERMISSIONS`.
 
-Для initial Personal Root assignment нет специального исключения:
-
-```text
-initial Personal Root assignment
-→ CHANGE / REVOKE как обычный assignment
-→ после REVOKE hidden personal-root permission отсутствует
-→ current non-admin access определяется remaining effective permissions
-```
 
 Если `GRANT` вызван для уже существующего назначения либо `CHANGE`/`REVOKE` — для отсутствующего, ACL-состояние не изменяется и операция не подменяется другим типом изменения.
 
@@ -2472,7 +2401,8 @@ ACL считается успешно изменённым
 * SCOPE-ADMINISTRATION
 * SCOPE-INDEPENDENT-PERMISSIONS
 * SCOPE-CHANGE-LOG
-* BR-ACCOUNT-PERSONAL-ROOT
+* SCOPE-USER-ROOT-VIEW
+* BR-USER-ROOT-VIEW
 * BR-ACL-EFFECTIVE-PERMISSIONS
 
 ## BP-ADMIN-VIEW-FILE-ACTIVITY — просмотр активности по файлу администратором
@@ -2675,6 +2605,10 @@ client
 → изменяет только после successful processing
 ```
 
+Для non-admin incremental convergence также поддерживает актуальную `User Root View`: появление доступного ancestor должно убирать дублирование descendant как отдельного top-level entry, а утрата ancestor при сохранении descendant — позволять descendant снова стать top-level без раскрытия hidden physical path.
+
+Initial sync, full sync и cursor recovery этим процессом не добавляются.
+
 Требования намеренно не определяют конкретное representation переходов ACL/admin-status, cursor encoding, batching, pagination, response limits или retention policy журнала.
 
 **Связи:**
@@ -2687,6 +2621,8 @@ client
 * SCOPE-ACL
 * SCOPE-INDEPENDENT-PERMISSIONS
 * SCOPE-HIDDEN-ANCESTORS
+* SCOPE-USER-ROOT-VIEW
 * SCOPE-ADMINISTRATION
 * BR-ACL-EFFECTIVE-PERMISSIONS
+* BR-USER-ROOT-VIEW
 * BR-ADMIN-AT-LEAST-ONE-ADMIN
